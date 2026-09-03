@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, kpi, empty with context %}
+
+{% block title %}Upload lab reports{% endblock %}
+{% block scopebar %}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>Upload lab reports</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('main.reports_page') }}">Upload history</a>
+    <a class="btn btn-ghost" href="{{ url_for('main.settings_page') }}">Data settings</a>
+  </div>
+</div>
+
+{# ------------------------------------------------------------ intake form #}
+{% call panel('Choose files') %}
+  <form method="post" action="{{ url_for('main.upload_form') }}"
+        enctype="multipart/form-data" id="upload-form">
+
+    <div class="dropzone" id="dropzone"
+         data-url="{{ url_for('api.upload') }}"
+         data-allowed="{{ allowed | join(',') }}"
+         data-max-mb="{{ max_mb }}"
+         tabindex="0" role="button"
+         aria-label="Drop files here or press to choose them">
+      <strong>Drag lab reports here</strong>
+      <p>or click to browse &mdash; CSV, TSV, tab-delimited text and PDF lab reports.</p>
+      <input type="file" name="file" id="file-input" multiple
+             accept="{{ allowed | join(',') }}">
+    </div>
+
+    <ul class="filelist" id="filelist" aria-live="polite"></ul>
+
+    <p class="notice" id="upload-status" hidden></p>
+
+    <div class="upload-actions">
+      {# One button for each world: JavaScript posts file-by-file with progress,
+         no JavaScript posts the same multipart form and gets a redirect. #}
+      <button type="button" class="btn btn-big js-only" id="send" disabled>Nothing queued</button>
+      <button type="submit" class="btn btn-big no-js-only">Upload</button>
+      <label class="scope-check">
+        <input type="checkbox" name="allow_duplicate" id="allow_duplicate" value="1">
+        <span>allow a file that has been uploaded before</span>
+      </label>
+    </div>
+  </form>
+{% endcall %}
+
+{# ------------------------------------------------------- what gets parsed #}
+<div class="grid2">
+  {% call panel('What the reader looks for') %}
+    <h4 style="margin-bottom:.3rem">Isolate columns</h4>
+    <table class="breakdown">
+      <tbody>
+        <tr><th scope="row">Patient</th><td class="t-detail"><span class="mono">Patient ID, MRN, Hospital No, Accession, Ref, Emri</span></td></tr>
+        <tr><th scope="row">Ward</th><td class="t-detail"><span class="mono">Ward, Unit, Care Unit, Location, Nursing Unit, Department, Site, Zone</span></td></tr>
+        <tr><th scope="row">Specimen</th><td class="t-detail"><span class="mono">Specimen, Sample Type, Source, Specimen Source, Material, Matrix</span></td></tr>
+        <tr><th scope="row">Date</th><td class="t-detail"><span class="mono">Sample Date, Date Collected, Collection Date, Test Date, Result Date</span> &mdash; <span class="mono">DD/MM/YYYY</span>, <span class="mono">YYYY-MM-DD</span>, <span class="mono">MM-DD-YY</span> and <span class="mono">29 Aug 2026</span></td></tr>
+        <tr><th scope="row">Organism</th><td class="t-detail"><span class="mono">Organism, Pathogen, Isolate, Species, Germ, Microorganism, Bacteria, Agent</span></td></tr>
+      </tbody>
+    </table>
+  {% endcall %}
+
+  {% call panel('How an import is judged') %}
+    <dl class="kv">
+      <dt><span class="mono">imported</span></dt><dd>New rows were written. The count of isolates and susceptibility results is reported back.</dd>
+      <dt><span class="mono">duplicate</span></dt><dd>The SHA-256 of the file is already stored. Nothing was written; tick &ldquo;allow a file uploaded before&rdquo; if you meant to re-import.</dd>
+      <dt><span class="mono">empty</span></dt><dd>The file was read but no organism could be identified in it. The parse log shows which headers were found.</dd>
+      <dt><span class="mono">error</span></dt><dd>The file could not be opened, or exceeded the size limit.</dd>
+    </dl>
+    <p class="link-row">
+      <a href="{{ url_for('main.reports_page') }}">Audit trail of every upload</a>
+      <a href="{{ url_for('main.isolates_page') }}">Browse imported isolates</a>
+    </p>
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------------------ bundled data #}
+{% call panel('Bundled example reports') %}
+  {% if samples %}
+  <div class="tablewrap">
+    <table class="grid">
+      <thead>
+        <tr><th>File</th><th>Type</th><th>Size</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for s in samples %}
+        <tr>
+          <td class="mono">{{ s.name }}</td>
+          <td><span class="tag">{{ s.kind }}</span></td>
+          <td class="nowrap">{{ (s.size / 1024) | round(1) }} KB</td>
+          <td class="t-right">
+            <button type="button" class="btn btn-sm btn-ghost js-only"
+                    data-queue-sample="{{ url_for('main.sample_file', name=s.name) }}"
+                    data-name="{{ s.name }}">Queue this sample</button>
+            <a class="btn btn-sm btn-ghost no-js-only"
+               href="{{ url_for('main.sample_file', name=s.name) }}">Download, then upload it</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('No bundled samples found',
+             'The samples folder is empty. Run flask-seed-demo below, or upload a report of your own.',
+             'Load the demo dataset', '#demo') }}
+  {% endif %}
+{% endcall %}
+
+{# ------------------------------------------------------------ current data #}
+{% call panel('What is stored right now') %}
+  <div class="kpis" style="margin-bottom:.9rem">
+    {{ kpi('Reports', counts.reports | num, 'files on record', '') }}
+    {{ kpi('Isolates', counts.isolates | num, counts.targets | num ~ ' tracked', 'info') }}
+    {{ kpi('Patients', counts.patients | num, counts.wards ~ ' wards', '') }}
+    {{ kpi('Susceptibility results', counts.sensitivities | num,
+           'from ' ~ counts.isolates | num ~ ' isolates', '') }}
+    {{ kpi('Date range', (counts.first_date or '—') ~ ' → ' ~ (counts.last_date or '—'),
+           'the newest date drives every window', '', range=True) }}
+  </div>
+
+  {% if reports %}
+  <h4 style="margin-bottom:.35rem">Last {{ reports | length }} uploads</h4>
+  <div class="tablewrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>#</th><th>File</th><th>Uploaded</th>
+          <th class="t-num">Rows read</th><th class="t-num">Isolates</th>
+          <th class="t-num">Tracked</th><th class="t-num">Sens.</th>
+          <th>Status</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reports %}
+        <tr>
+          <td class="mono"><a href="{{ url_for('main.report_page', report_id=r.id) }}">#{{ r.id }}</a></td>
+          <td><a href="{{ url_for('main.report_page', report_id=r.id) }}">{{ r.filename }}</a>
+            <span class="sub">{{ r.file_type | upper }} &middot; layout: {{ r.layout or 'auto' }}</span></td>
+          <td class="nowrap small">{{ r.uploaded_at | when }}</td>
+          <td class="t-num">{{ r.rows_read }}</td>
+          <td class="t-num">{{ r.rows_total }}</td>
+          <td class="t-num">{{ r.target_hits }}</td>
+          <td class="t-num">{{ r.sensitivities }}</td>
+          <td><span class="pill pill-{{ 'low' if r.status == 'imported' else ('medium' if r.status == 'partial' else 'none') }}">{{ r.status }}</span></td>
+          <td class="t-right"><a class="btn btn-sm btn-ghost" href="{{ url_for('main.report_page', report_id=r.id) }}">open</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="link-row"><a href="{{ url_for('main.reports_page') }}">All {{ counts.reports }} reports</a></p>
+  {% else %}
+    {{ empty('Nothing has been uploaded yet',
+             'Every page of this application is driven by the files you add here. Queue a bundled sample to see the dashboard fill in.',
+             'Load the demonstration dataset', '#demo') }}
+  {% endif %}
+{% endcall %}
+
+{# ---------------------------------------------------------------- demo data #}
+{% call panel('Demonstration dataset') %}
+  <div id="demo">
+    <form method="post" action="{{ url_for('main.settings_seed') }}"
+          data-confirm="Generate the synthetic demonstration dataset and add it to the database?">
+      <button type="submit" class="btn btn-big">Load the demonstration dataset</button>
+    </form>
+  </div>
+{% endcall %}
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty with context %}
+
+{% block title %}{{ code }} &middot; {{ title }}{% endblock %}
+{% block scopebar %}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>{{ title }}</h1>
+    <p>HTTP {{ code }}</p>
+  </div>
+  <div class="head-actions">
+    <a class="btn" href="{{ url_for('main.dashboard') }}">Back to the dashboard</a>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-body">
+    <p class="notice{% if code == 500 %} notice-warn{% endif %}">{{ message }}</p>
+
+    {% if detail %}
+    <pre class="log">{{ detail }}</pre>
+    {% endif %}
+
+    <p class="link-row">
+      <a href="{{ url_for('main.upload_page') }}">Upload a lab report</a>
+      <a href="{{ url_for('main.settings_page') }}">Thresholds and tracked organisms</a>
+      <a href="{{ url_for('api.health') }}">API health</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel with context %}
+
+{% block title %}Account settings{% endblock %}
+{% block scopebar %}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>Account settings</h1>
+  </div>
+</div>
+
+{% call panel('Change password') %}
+  <form method="post" action="{{ url_for('main.account_password') }}"
+        class="password-form" autocomplete="off" novalidate>
+    <label class="field">
+      <span class="field-label">Current password</span>
+      <input type="password" name="current_password" required
+             autocomplete="current-password" minlength="6">
+    </label>
+    <label class="field">
+      <span class="field-label">New password</span>
+      <input type="password" name="new_password" required
+             autocomplete="new-password" minlength="6">
+    </label>
+    <label class="field">
+      <span class="field-label">Confirm new password</span>
+      <input type="password" name="confirm_password" required
+             autocomplete="new-password" minlength="6">
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-sm">Update password</button>
+    </div>
+  </form>
+{% endcall %}
+
+{% call panel('Preferences and access') %}
+  <ul class="setlist">
+    <li>
+      <span class="set-name">Notification preferences</span>
+      <a class="btn btn-sm btn-ghost"
+         href="{{ url_for('main.settings_page') }}#alerts-notifications">Manage</a>
+    </li>
+    <li>
+      <span class="set-name">Sign in with another account</span>
+      <form method="post" action="{{ url_for('main.account_switch') }}"
+            class="switch-form">
+        <button type="submit" class="btn btn-sm btn-ghost">Switch account</button>
+      </form>
+    </li>
+    <li>
+      <span class="set-name">Log out</span>
+      <form method="post" action="{{ url_for('auth.logout') }}"
+            class="switch-form">
+        <button type="submit" class="btn btn-sm btn-ghost">Log out</button>
+      </form>
+    </li>
+  </ul>
+{% endcall %}
+{% endblock %}

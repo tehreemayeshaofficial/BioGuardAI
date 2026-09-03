@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, pill, kpi, risk_gauge, meter, component_table,
+                                reasons, empty with context %}
+
+{% block title %}Alerts{% endblock %}
+
+{% block content %}
+{% set window = kpis.window_days %}
+<div class="pagehead">
+  <div>
+    <h1>Alerts</h1>
+  </div>
+  <div class="head-actions">
+    {% if notif_flags.in_app and alert.assessment %}
+      <form method="post" action="{{ url_for('main.alerts_notify') }}" class="inline-form">
+        <button class="btn" type="submit">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          Notify Infection Control Team
+        </button>
+      </form>
+      <a class="btn btn-wa" href="{{ alert.whatsapp }}" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2Zm5.6 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1a12 12 0 0 1-5.9-4.9c-.4-.7-.9-1.6-.9-2.5 0-.9.5-1.4.7-1.6.2-.2.4-.3.6-.3h.5c.2 0 .4 0 .5.4l.8 1.9c.1.2 0 .4-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.6 1.9 1.1.9 1.9 1.2 2.2 1.3.3.1.5.1.6-.1l.7-.8c.2-.2.3-.2.6-.1l1.8.9c.3.1.4.2.5.3.1.2.1.6-.1 1.1Z"/></svg>
+        Send WhatsApp Alert
+      </a>
+      <a class="btn btn-mail" href="{{ alert.mailto }}">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+        Send Email Alert
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+{% if notif_flags.in_app %}
+<div class="status status-{{ status.tone }}">
+  <span class="status-level">{{ 'ALERT' if status.level == 'High'
+    else ('WATCH' if status.level == 'Medium' else ('CLEAR' if status.level == 'Low' else 'IDLE')) }}</span>
+  <span class="status-text">{{ status.text }}</span>
+  <span class="status-side">
+    <span><b>{{ counts.High }}</b> high</span>
+    <span><b>{{ counts.Medium }}</b> medium</span>
+    <span><b>{{ counts.Low }}</b> low</span>
+  </span>
+</div>
+{% endif %}
+
+{% if not notif_flags.in_app %}
+  {{ empty('In-app alerts are turned off',
+           'Alert display is disabled for this workspace. Enable it in Settings → Alerts & notifications '
+           ~ 'to see outbreak and AMR alerts here.',
+           'Open Settings', url_for('main.settings_page') ~ '#alerts-notifications') }}
+{% elif not alert.assessment %}
+  {{ empty('No outbreak alert to raise',
+           'Nothing in this scope is scoring an actionable risk band right now. '
+           ~ 'Upload a lab report or widen the filter to see alerts here.',
+           'Upload a report', url_for('main.upload_page')) }}
+{% else %}
+
+{# ------------------------------------------------- the primary alert card #}
+<section class="alert-card" style="border-left: 5px solid {{ alert.color }}">
+  <div class="alert-head">
+    <span class="alert-eyebrow">
+      {{ pill(alert.level, alert.level ~ ' outbreak risk') }}
+      {% if not alert.active %}<span class="tag tag-marker">watch level</span>{% endif %}
+      &middot; priority alert
+    </span>
+    <h2 class="alert-title">
+      <a href="{{ url_for('main.pathogen_page', key=alert.pathogen, **scope.as_args(pathogen=alert.pathogen)) }}">{{ alert.organism_full }}</a>
+    </h2>
+    <p class="alert-sub">
+      {{ alert.pathogen_display }} on <strong>{{ alert.ward }}</strong>
+      {%- if alert.other_wards %} (+{{ alert.other_wards }} other ward{{ 's' if alert.other_wards != 1 }}){% endif -%}
+    </p>
+  </div>
+  <div class="alert-gauge">
+    {{ risk_gauge(alert.score, alert.color, 'risk', 'risk score') }}
+    <span class="gauge-cap">{{ alert.score }}/100 weighted score</span>
+  </div>
+  <ul class="alert-facts">
+    <li><span class="fact-val">{{ alert.cases }}</span><span class="fact-lab">cases in {{ window }}d</span></li>
+    <li><span class="fact-val">{{ alert.patients }}</span><span class="fact-lab">patients</span></li>
+    <li><span class="fact-val">{{ alert.excess_ratio }}&times;</span><span class="fact-lab">endemic expectation</span></li>
+    <li><span class="fact-val">{{ alert.mdr_rate }}%</span><span class="fact-lab">MDR or worse</span></li>
+  </ul>
+</section>
+
+<div class="grid2">
+  {# ------------------------------------------------ 7-day case trend bar chart #}
+  {% call panel('Case trend — last 7 days') %}
+    {% set peak = alert.trend_peak %}
+    <div class="trend" role="img" aria-label="Daily case trend, {{ alert.trend_total }} cases in the last 7 days">
+      {% for d in alert.trend %}
+        {% set h = (d.count / peak * 100) | round(1) if peak else 0 %}
+        <div class="trend-col">
+          <span class="trend-count">{{ d.count }}</span>
+          <span class="trend-track">
+            <span class="trend-bar" style="height: {{ [h, 6] | max if d.count else 2 }}%"></span>
+          </span>
+          <span class="trend-lab">{{ d.weekday }}</span>
+          <span class="trend-date">{{ d.date }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="small muted trend-foot">
+      {{ alert.trend_total }} case{{ '' if alert.trend_total == 1 else 's' }} in the last 7 days
+      &middot; peak of {{ peak }} on a single day.
+    </p>
+  {% endcall %}
+
+  {# ----------------------------------------------------- AI Recommendation #}
+  {% call panel('AI Recommendation') %}
+    <div class="ai-rec" style="border-left: 4px solid {{ alert.color }}">
+      <div class="ai-rec-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a4 4 0 0 0-4 4 4 4 0 0 0-1 7.9V17a3 3 0 0 0 6 0V3"/><path d="M12 3a4 4 0 0 1 4 4 4 4 0 0 1 1 7.9V17a3 3 0 0 1-6 0"/><path d="M9 21h6"/></svg>
+      </div>
+      <p class="ai-rec-text">{{ alert.recommendation }}</p>
+    </div>
+    {% if alert.actions %}
+      <h4 style="margin-top:.7rem">Suggested control measures</h4>
+      <ul class="actions">
+        {% for a in alert.actions %}<li>{{ a }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {{ reasons(alert.reasons, 'Why this band was reached') }}
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------ resistance pattern table #}
+{% call panel('Resistance pattern — ' ~ alert.pathogen_display) %}
+  {% if alert.agents %}
+  <div class="tablewrap">
+    <table class="grid" id="tbl-resistance">
+      <thead>
+        <tr>
+          <th>Antibiotic</th>
+          <th>Class</th>
+          <th class="t-num">Tested</th>
+          <th class="t-num">Resistant</th>
+          <th>Resistance rate</th>
+          <th>Verdict</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in alert.agents %}
+        <tr>
+          <td><b>{{ r.antibiotic_display }}</b>{% if r.is_critical %} <span class="tag tag-marker">last-line</span>{% endif %}</td>
+          <td class="small muted">{{ r.category }}</td>
+          <td class="t-num" data-v="{{ r.tested }}">{{ r.tested }}</td>
+          <td class="t-num" data-v="{{ r.resistant }}">{{ r.resistant }}</td>
+          <td style="min-width:140px">{{ meter(r.rate, r.tested, r.is_critical, r.antibiotic_display ~ ' - ' ~ r.rate ~ '% resistant') }}</td>
+          <td><span class="res-badge res-{{ r.status | lower }}">{{ r.status }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="notice">No susceptibility results were reported for this organism in the
+    current scope, so no resistance pattern can be shown.</p>
+  {% endif %}
+{% endcall %}
+
+{# --------------------------------------------------- other flagged alerts #}
+{% if high | length > 1 or (counts.Medium and high | length < 2) %}
+{% call panel('Other organisms under review') %}
+  <ul class="alert-list">
+    {% for a in high if a.pathogen != alert.pathogen %}
+    <li class="alert-row" style="border-left: 4px solid {{ a.color }}">
+      <span class="alert-row-score" style="color: {{ a.color }}">{{ a.score }}</span>
+      <span class="alert-row-body">
+        <a class="strong" href="{{ url_for('main.pathogen_page', key=a.pathogen, **scope.as_args(pathogen=a.pathogen)) }}">{{ a.pathogen_display }}</a>
+        <span class="sub">
+          {{ a.recent_cases }} cases / {{ a.recent_patients }} patients
+          {%- if a.hot_wards %} &middot; {{ a.hot_wards[0].ward }}{% endif -%}
+        </span>
+      </span>
+      {{ pill(a.level) }}
+    </li>
+    {% endfor %}
+    {% for a in view.outbreak_summary.medium if a.level == 'Medium' %}
+    <li class="alert-row" style="border-left: 4px solid {{ a.color }}">
+      <span class="alert-row-score" style="color: {{ a.color }}">{{ a.score }}</span>
+      <span class="alert-row-body">
+        <a class="strong" href="{{ url_for('main.pathogen_page', key=a.pathogen, **scope.as_args(pathogen=a.pathogen)) }}">{{ a.pathogen_display }}</a>
+        <span class="sub">
+          {{ a.recent_cases }} cases / {{ a.recent_patients }} patients
+          {%- if a.hot_wards %} &middot; {{ a.hot_wards[0].ward }}{% endif -%}
+        </span>
+      </span>
+      {{ pill(a.level) }}
+    </li>
+    {% endfor %}
+  </ul>
+{% endcall %}
+{% endif %}
+
+{% endif %}
+{% endblock %}

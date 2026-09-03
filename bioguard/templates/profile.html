@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel with context %}
+
+{% block title %}Profile{% endblock %}
+{% block scopebar %}{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <div>
+    <h1>Profile</h1>
+  </div>
+</div>
+
+{% call panel('Profile photo') %}
+  <div class="avatar-row">
+    <div class="avatar-preview">
+      {% if has_avatar %}
+        <img src="{{ url_for('main.avatar_image') }}?v={{ avatar_stamp }}"
+             alt="Profile photo" class="avatar-img">
+      {% else %}
+        <span class="avatar-initial">{{ initial }}</span>
+      {% endif %}
+    </div>
+    <div class="avatar-actions">
+      <form method="post" enctype="multipart/form-data"
+            action="{{ url_for('main.avatar_upload') }}" class="avatar-form">
+        <label class="avatar-file">
+          <input type="file" name="avatar"
+                 accept="image/jpeg,image/png,image/gif,image/webp" required>
+          <span class="btn btn-sm btn-ghost">Choose photo</span>
+        </label>
+        <button type="submit" class="btn btn-sm">Upload</button>
+      </form>
+      {% if has_avatar %}
+      <form method="post" action="{{ url_for('main.avatar_remove') }}" class="avatar-form">
+        <button type="submit" class="btn btn-sm btn-ghost">Remove photo</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+{% endcall %}
+
+{% call panel('Personal details') %}
+  <form method="post" action="{{ url_for('main.profile_update') }}"
+        class="profile-form" novalidate>
+    <label class="field">
+      <span class="field-label">Full name</span>
+      <input type="text" name="full_name" maxlength="120" autocomplete="name"
+             value="{{ current_user.ico_officer or '' }}"
+             placeholder="e.g. Dr. Nadia Rahman">
+    </label>
+    <label class="field">
+      <span class="field-label">E-mail</span>
+      <input type="email" name="email" maxlength="200" autocomplete="email" required
+             value="{{ current_user.email or '' }}"
+             placeholder="you@hospital.org">
+    </label>
+    <div class="field field-ro">
+      <span class="field-label">Hospital / workspace</span>
+      <input type="text" value="{{ current_user.hospital_name }}" readonly>
+    </div>
+    <div class="field field-ro">
+      <span class="field-label">Role</span>
+      <input type="text" value="Infection Control Officer" readonly>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-sm">Save changes</button>
+    </div>
+  </form>
+{% endcall %}
+{% endblock %}

@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, kpi, empty with context %}
+
+{% block title %}Settings{% endblock %}
+{% block scopebar %}{% endblock %}
+
+{# Concise, one-line descriptions shown by default for each scoring component.
+   The keys mirror config.RISK_WEIGHTS; the numbers themselves come from the
+   running config so this page can never disagree with the engine. #}
+{% set WEIGHT_SHORT = {
+  'excess_frequency':  'Recent activity above the organism’s own endemic baseline.',
+  'case_volume':       'Number of recent episodes.',
+  'patient_spread':    'Distinct patients affected in the recent window.',
+  'ward_concentration':'Clustering on the single most-affected ward.',
+  'resistance_burden': 'MDR / XDR / PDR share plus critical-agent resistance.',
+  'pathogen_threat':   'Intrinsic severity and transmissibility of the organism.',
+} %}
+{# Longer wording kept for the collapsible methodology section only. #}
+{% set WEIGHT_HELP = {
+  'excess_frequency': 'Recent activity against the organism’s OWN endemic expectation. The largest single weight, because a rise above baseline is what an outbreak actually is.',
+  'case_volume': 'Absolute number of recent episodes. Saturates, so a very large hospital is not permanently red.',
+  'patient_spread': 'Distinct patients carrying it in the recent window. One patient colonised is not an outbreak; ten is.',
+  'ward_concentration': 'How many of those patients sit on the single most affected ward - the classic transmission signature.',
+  'resistance_burden': 'MDR / XDR / PDR share plus resistance on the agents that would have been used to treat it.',
+  'pathogen_threat': 'Intrinsic severity and transmissibility of the organism, from the knowledge base. Caps how high a quiet-but-dangerous pathogen can score.',
+} %}
+
+{% set max_weight = weights.values() | list | max %}
+
+{% block content %}
+{# Two views share the /settings route. The sidebar links to `/settings` for the
+   configuration view and `/settings#references` for the References & Guide view;
+   the URL fragment selects which block is rendered (see `.settings-refs` rules
+   in app.css), so neither view has to be reached by scrolling through the other. #}
+<div class="settings-main">
+<div class="pagehead">
+  <div>
+    <h1>Settings</h1>
+  </div>
+</div>
+
+{# ------------------------------------------------------- hospital profile #}
+{% call panel('Hospital profile') %}
+  <dl class="kv">
+    <dt>Hospital name</dt><dd>{{ current_user.hospital_name or 'Not provided' }}</dd>
+    <dt>City</dt><dd>Not provided</dd>
+    <dt>ICO officer</dt><dd>{{ current_user.ico_officer or current_user.username or 'Not provided' }}</dd>
+    <dt>Contact e-mail</dt><dd>{{ current_user.email or 'Not provided' }}</dd>
+  </dl>
+{% endcall %}
+
+{# ------------------------------------------------- alerts & notifications #}
+<span id="alerts-notifications" aria-hidden="true"></span>
+{% call panel('Alerts & notifications') %}
+  <ul class="setlist">
+    <li><span class="set-name">In-app alerts</span>
+      <form method="post" action="{{ url_for('main.settings_alert_toggle') }}" class="switch-form">
+        <input type="hidden" name="which" value="in_app">
+        <input type="hidden" name="value" value="{{ 'off' if notif_flags.in_app else 'on' }}">
+        <button type="submit"
+                class="switch {{ 'is-on' if notif_flags.in_app else 'is-off' }}"
+                role="switch" aria-checked="{{ 'true' if notif_flags.in_app else 'false' }}"
+                aria-label="In-app alerts">
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-state">{{ 'ON' if notif_flags.in_app else 'OFF' }}</span>
+        </button>
+      </form></li>
+    <li><span class="set-name">Alert generation</span>
+      <form method="post" action="{{ url_for('main.settings_alert_toggle') }}" class="switch-form">
+        <input type="hidden" name="which" value="generation">
+        <input type="hidden" name="value" value="{{ 'off' if notif_flags.generation else 'on' }}">
+        <button type="submit"
+                class="switch {{ 'is-on' if notif_flags.generation else 'is-off' }}"
+                role="switch" aria-checked="{{ 'true' if notif_flags.generation else 'false' }}"
+                aria-label="Alert generation">
+          <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+          <span class="switch-state">{{ 'ON' if notif_flags.generation else 'OFF' }}</span>
+        </button>
+      </form></li>
+    <li><span class="set-name">E-mail delivery</span>
+      <span class="tag tag-off">Not connected</span></li>
+    <li><span class="set-name">WhatsApp delivery</span>
+      <span class="tag tag-off">Not connected</span></li>
+  </ul>
+{% endcall %}
+
+{# ------------------------------------------------------ AI & analysis #}
+{# Read-only status of genuinely-automatic behaviour - there are no toggles to
+   switch, so nothing here pretends to be configurable. #}
+{% call panel('AI & analysis') %}
+  <ul class="setlist">
+    <li><span class="set-name">Analysis engine</span>
+      <span class="tag">Automatic</span></li>
+    <li><span class="set-name">Outbreak prediction</span>
+      <span class="tag">Enabled</span></li>
+    <li><span class="set-name">Antimicrobial resistance</span>
+      <span class="tag">Enabled</span></li>
+    <li><span class="set-name">AI-assisted interpretation</span>
+      <span class="tag tag-off">Advisory</span></li>
+  </ul>
+{% endcall %}
+
+{# ------------------------------------------------------------- thresholds #}
+{% call panel('Alert thresholds') %}
+  <div class="tablewrap">
+    <table class="breakdown">
+      <tbody>
+        {% for t in thresholds %}
+        <tr>
+          <th scope="row">{{ t.label }}</th>
+          <td class="t-score"><b>{{ t.value }}</b></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+
+</div>{# /.settings-main #}
+
+{# --------------------------------------------------- references & guide #}
+{# Everything documentation-heavy (KPIs strip, threshold definitions, risk
+   model, organism table, wards/limits, data tools) lives here and is reached
+   via the sidebar's "References & Guide" link at `/settings#references`. #}
+<div id="references" class="settings-refs">
+{% call panel('References & Guide') %}
+  <div class="guide">
+    <h4>BioGuard AI</h4>
+    <p>Hospital infection surveillance, antimicrobial resistance monitoring, and outbreak-risk assessment.</p>
+
+    <h4>How surveillance works</h4>
+    <p>Uploaded laboratory reports are processed into isolate-level surveillance data. Trends, resistance patterns, ward distribution, and outbreak indicators are calculated from the available dataset.</p>
+
+    <h4>Risk interpretation</h4>
+    <ul class="guide-list">
+      <li><b>Low</b> &mdash; routine surveillance</li>
+      <li><b>Moderate</b> &mdash; increased monitoring</li>
+      <li><b>High</b> &mdash; infection-control review recommended</li>
+      <li><b>Critical</b> &mdash; urgent review/action according to hospital policy</li>
+    </ul>
+
+    <h4>Antimicrobial resistance</h4>
+    <ul class="guide-list">
+      <li><b>MDR</b> &mdash; non-susceptibility in at least 3 antimicrobial categories.</li>
+      <li><b>XDR</b> &mdash; non-susceptibility in all but 2 or fewer antimicrobial categories.</li>
+      <li><b>PDR</b> &mdash; non-susceptibility to every tested agent.</li>
+    </ul>
+
+    <h4>Data &amp; AI note</h4>
+    <p>AI-assisted analysis supports surveillance and should be interpreted by qualified infection-control/laboratory personnel. BioGuard AI does not replace clinical judgment or hospital policy.</p>
+  </div>
+{% endcall %}
+
+<div class="kpis">
+  {{ kpi('Reports on file', counts.reports | num,
+         'originals retained' if model.keep_uploads else 'parsed rows only', '') }}
+  {{ kpi('Isolate rows', counts.isolates | num,
+         counts.targets | num ~ ' tracked &middot; '
+         ~ (counts.isolates - counts.targets) | num ~ ' other', 'info') }}
+  {{ kpi('Patients affected', counts.patients | num,
+         'carrying a tracked organism', '') }}
+  {{ kpi('Wards reporting', counts.wards,
+         protected_wards | length ~ ' protected-ward keywords', '') }}
+  {{ kpi('Data covered', (counts.first_date or '—') ~ ' → ' ~ (counts.last_date or '—'),
+         counts.sensitivities | num ~ ' susceptibility results', '', range=True) }}
+</div>
+
+{# ------------------------------------------------ threshold definitions #}
+{% call panel('Threshold definitions') %}
+  <dl class="kv">
+    {% for t in thresholds %}
+    <dt>{{ t.label }}</dt><dd>{{ t.help | safe }}</dd>
+    {% endfor %}
+  </dl>
+{% endcall %}
+
+{# ------------------------------------------------------------------ model #}
+{% call panel('Risk score model') %}
+  <table class="breakdown">
+    <tbody>
+      {% for name, pts in weights.items() %}
+      <tr>
+        <th scope="row">{{ name.replace('_', ' ') | capitalize }}</th>
+        <td class="t-score"><b>{{ pts }}</b><span class="of">/100</span></td>
+        <td class="t-bar">
+          <span class="mini"><span style="width: {{ (100 * pts / max_weight) | round(0) | int }}%"></span></span>
+        </td>
+        <td class="t-detail">{{ WEIGHT_SHORT[name] or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <details class="method">
+    <summary>Detailed methodology</summary>
+    <h4>Component notes</h4>
+    <dl class="kv">
+      {% for name, pts in weights.items() %}
+      <dt>{{ name.replace('_', ' ') | capitalize }}</dt><dd>{{ (WEIGHT_HELP[name] or '') | safe }}</dd>
+      {% endfor %}
+    </dl>
+    <h4>Scoring rules</h4>
+    <dl class="kv">
+      <dt>Endemic gate</dt><dd>at or below the organism&rsquo;s own expectation, the four activity components are damped to {{ (model.endemic_gate * 100) | round(0) | int }}% of their value</dd>
+      <dt>De-escalation</dt><dd>activity under {{ model.suppress_ratio }}&times; expectation forces the level down to Low</dd>
+      <dt>Escalation opens</dt><dd>only past {{ model.escalation_min_ratio }}&times; expectation <em>and</em> a score of {{ model.escalation_min_score }}</dd>
+      <dt>Escalation cap</dt><dd>rules can add at most {{ model.max_escalation }} band{{ '' if model.max_escalation == 1 else 's' }}</dd>
+      <dt>Baseline bins</dt><dd>{{ model.baseline_bins }} completed historical window{{ '' if model.baseline_bins == 1 else 's' }} needed before an expectation is trusted</dd>
+      <dt>MDR</dt><dd>non-susceptible to at least one agent in {{ model.mdr_categories }} or more antimicrobial categories</dd>
+      <dt>XDR</dt><dd>non-susceptible to at least one agent in all but {{ model.xdr_options }} or fewer categories</dd>
+      <dt>PDR</dt><dd>non-susceptible to every agent tested</dd>
+      <dt>Cluster floor</dt><dd>{{ model.cluster_min_patients }} distinct patients; {{ model.ward_cluster_min_patients }} on a single ward</dd>
+      <dt>Spread linkage</dt><dd>{{ model.cluster_spread_min_patients }} distinct patients counts as linkage even with no ward holding two of them</dd>
+      <dt>Protected cohort</dt><dd>{{ model.protected_cluster }} linked patients on a high-consequence ward escalates a band ({{ model.large_cluster }} anywhere else)</dd>
+    </dl>
+    <h4>Saturation ceilings</h4>
+    <ul class="tag-list">
+      {% for key, cap in model.saturation.items() %}
+      <li class="tag"><span class="mono">{{ key }}</span> at {{ cap }}</li>
+      {% endfor %}
+    </ul>
+  </details>
+{% endcall %}
+
+{# -------------------------------------------------------------- organisms #}
+{% call panel('Tracked organisms') %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-pathogens">
+      <thead>
+        <tr>
+          <th data-sort="organism"><button type="button">Organism</button></th>
+          <th data-sort="gram"><button type="button">Gram</button></th>
+          <th data-sort="threat"><button type="button">Intrinsic threat</button></th>
+          <th data-sort="aliases"><button type="button">Name variants</button></th>
+          <th data-sort="flags"><button type="button">Managed as</button></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pathogens | sort(attribute='threat', reverse=true) %}
+        <tr>
+          <td data-v="{{ p.key }}">
+            <span class="strong">{{ p.short }}</span>
+            <span class="sub"><i>{{ p.name }}</i></span>
+          </td>
+          <td class="small">{{ p.gram }}</td>
+          <td data-v="{{ p.threat }}">
+            <span class="mini"><span style="width: {{ (p.threat * 100) | round(0) | int }}%"></span></span>
+            <span class="sub">{{ (p.threat * 100) | round(0) | int }}%</span>
+          </td>
+          <td class="t-num" data-v="{{ p.aliases }}" title="Aliases, abbreviations and common misspellings the matcher will accept">
+            {{ p.aliases }}
+          </td>
+          <td>
+            <ul class="tag-list">
+              {% if p.mdro %}<li class="tag tag-mdr">MDRO</li>{% endif %}
+              {% if p.public_health %}<li class="tag tag-protected">notifiable</li>{% endif %}
+              {% if not p.mdro and not p.public_health %}<li class="tag tag-off">routine precautions</li>{% endif %}
+            </ul>
+          </td>
+          <td class="t-right">
+            <a class="btn btn-sm btn-ghost"
+               href="{{ url_for('main.pathogen_page', key=p.key, **scope.as_args(pathogen=p.key)) }}">open</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+
+{# ---------------------------------------------------------- ward + config #}
+<div class="grid2">
+  {% call panel('High-consequence wards') %}
+    <ul class="tag-list">
+      {% for w in protected_wards %}<li class="tag tag-protected">{{ w }}</li>{% endfor %}
+    </ul>
+  {% endcall %}
+
+  {% call panel('Runtime limits') %}
+    <dl class="kv">
+      <dt>Upload limit</dt><dd>{{ model.max_upload_mb }} MB per file</dd>
+      <dt>Accepted types</dt><dd class="mono">.csv .tsv .txt .pdf</dd>
+      <dt>Originals retained</dt><dd>{{ 'yes' if model.keep_uploads else 'no - parsed rows only' }}</dd>
+      <dt>List page size</dt><dd>{{ model.page_size }} rows</dd>
+      <dt>Auto-seed on first run</dt><dd>yes, when the database holds no reports</dd>
+    </dl>
+    <details class="method">
+      <summary>Environment variables</summary>
+      <ul class="tag-list">
+        <li class="tag">BIOGUARD_DB</li>
+        <li class="tag">BIOGUARD_MAX_UPLOAD_MB</li>
+        <li class="tag">BIOGUARD_KEEP_UPLOADS</li>
+        <li class="tag">BIOGUARD_AUTOSEED</li>
+        <li class="tag">BIOGUARD_SEED_DEMO</li>
+        <li class="tag">BIOGUARD_SECRET_KEY</li>
+        <li class="tag">BIOGUARD_HOST</li>
+        <li class="tag">BIOGUARD_PORT</li>
+      </ul>
+    </details>
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------------------- data tools #}
+{% call panel('Data') %}
+  <div class="split">
+    <div>
+      <h4 style="margin-bottom:.3rem">Demonstration dataset</h4>
+      {% if counts.reports %}
+      <p class="small muted">Currently {{ counts.reports }} report{{ '' if counts.reports == 1 else 's' }} on file.</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('main.settings_seed') }}"
+            data-confirm="Generate the synthetic demonstration dataset and add it to this database?">
+        <button type="submit" class="btn">Load the demonstration dataset</button>
+      </form>
+      <form method="post" action="{{ url_for('main.settings_demo_off') }}"
+            data-confirm="Remove the demonstration report and every row parsed from it? Uploaded reports are left alone.">
+        <button type="submit" class="btn btn-ghost">Remove demonstration data only</button>
+      </form>
+    </div>
+
+    <div>
+      <h4 style="margin-bottom:.3rem">Bundled sample files</h4>
+      {% if samples %}
+      <ul class="tag-list">
+        {% for s in samples %}
+        <li><a class="tag" href="{{ url_for('main.sample_file', name=s.name) }}">{{ s.name }}</a>
+          <span class="sub">{{ s.kind }} &middot; {{ (s.size / 1024) | round(1) }} KB</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        {{ empty('No sample files bundled',
+                 'The samples folder is empty or missing. Upload your own CSV or PDF lab report instead - the reader accepts any column order.',
+                 'Go to upload', url_for('main.upload_page')) }}
+      {% endif %}
+    </div>
+
+    <div>
+      <h4 style="margin-bottom:.3rem">Wipe</h4>
+      <form method="post" action="{{ url_for('main.settings_reset') }}"
+            data-confirm="Delete every report, isolate and uploaded file held by this instance?">
+        <label class="scope-field" for="confirm">
+          <span>Type <span class="mono">DELETE</span> to confirm</span>
+          <input id="confirm" name="confirm" type="text" autocomplete="off"
+                 spellcheck="false" placeholder="DELETE" required>
+        </label>
+        <button type="submit" class="btn btn-danger">Delete all surveillance data</button>
+      </form>
+    </div>
+  </div>
+{% endcall %}
+</div>{# /.settings-refs #}
+{% endblock %}

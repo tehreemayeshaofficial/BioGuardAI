@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, kpi, empty, pager with context %}
+
+{% block title %}Reports &amp; Export{% endblock %}
+{% block scopebar %}{% endblock %}
+
+{% block content %}
+{% set first = (page_no - 1) * per + 1 %}
+{% set last = [page_no * per, total] | min %}
+<div class="pagehead">
+  <div>
+    <h1>Reports &amp; Export</h1>
+    <p>Generate and download surveillance reports.</p>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('api.reports_api') }}">Audit JSON</a>
+    <a class="btn" href="{{ url_for('main.upload_page') }}">Upload report</a>
+  </div>
+</div>
+
+{# ------------------------------------------------- report exports (existing)
+   Each action points at a live endpoint that already produces this analysis;
+   no report generator is invented here. #}
+{% call panel('Surveillance reports') %}
+  <div class="tablewrap">
+    <table class="grid">
+      <thead>
+        <tr><th>Report</th><th>Description</th><th class="t-right">Export</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><b>Daily report</b></td>
+          <td>Lab results &amp; resistance, per isolate</td>
+          <td class="t-right"><a class="btn btn-sm" href="{{ url_for('api.export_isolates') }}">Export CSV</a></td>
+        </tr>
+        <tr>
+          <td><b>Weekly report</b></td>
+          <td>Weekly surveillance trend</td>
+          <td class="t-right"><a class="btn btn-sm btn-ghost" href="{{ url_for('api.trends_api') }}">Download</a></td>
+        </tr>
+        <tr>
+          <td><b>AMR report</b></td>
+          <td>Antimicrobial resistance analysis</td>
+          <td class="t-right"><a class="btn btn-sm btn-ghost" href="{{ url_for('api.amr_api') }}">Download</a></td>
+        </tr>
+        <tr>
+          <td><b>Outbreak report</b></td>
+          <td>Cluster analysis</td>
+          <td class="t-right"><a class="btn btn-sm btn-ghost" href="{{ url_for('api.outbreak_api') }}">Download</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small" style="margin:.6rem 0 0">Each export downloads the data already computed for this workspace&rsquo;s current scope.</p>
+{% endcall %}
+
+<div class="kpis">
+  {{ kpi('Reports', total | num,
+         'page ' ~ page_no ~ ' of ' ~ pages ~ ' at ' ~ per ~ ' per page', '') }}
+  {{ kpi('Isolate rows', counts.isolates | num,
+         counts.targets | num ~ ' tracked organisms', 'info') }}
+  {{ kpi('Tracked isolates', counts.targets | num,
+         ((100 * counts.targets / (counts.isolates or 1)) | round(0) | int) ~ '% of everything read', '') }}
+  {{ kpi('Susceptibility results', counts.sensitivities | num,
+         'drive every AMR rate on this site', '') }}
+  {{ kpi('Date range covered', (counts.first_date or '—') ~ ' → ' ~ (counts.last_date or '—'),
+         'sample dates, not upload dates', '', range=True) }}
+</div>
+
+{% call panel('Files received') %}
+  {% if reports %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-reports">
+      <thead>
+        <tr>
+          <th data-sort="id"><button type="button">#</button></th>
+          <th data-sort="file"><button type="button">File</button></th>
+          <th data-sort="uploaded"><button type="button">Uploaded</button></th>
+          <th data-sort="source"><button type="button">Source</button></th>
+          <th class="t-num" data-sort="read"><button type="button">Rows read</button></th>
+          <th class="t-num" data-sort="skipped"><button type="button">Skipped</button></th>
+          <th class="t-num" data-sort="isolates"><button type="button">Isolates</button></th>
+          <th class="t-num" data-sort="tracked"><button type="button">Tracked</button></th>
+          <th class="t-num" data-sort="sens"><button type="button">Sens.</button></th>
+          <th data-sort="status"><button type="button">Status</button></th>
+          <th data-sort="message"><button type="button">Verdict</button></th>
+          <th><button type="button">Actions</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reports %}
+        {% set tone = 'low' if r.status in ('imported', 'seeded') else
+                      ('medium' if r.status in ('partial', 'duplicate', 'empty') else 'high' if r.status == 'error' else 'none') %}
+        <tr class="row-{{ tone if tone in ('high', 'medium') }}">
+          <td class="mono" data-v="{{ r.id }}">
+            <a href="{{ url_for('main.report_page', report_id=r.id) }}">#{{ r.id }}</a>
+          </td>
+          <td style="min-width:190px">
+            <a class="strong" href="{{ url_for('main.report_page', report_id=r.id) }}">{{ r.filename }}</a>
+            <span class="sub">{{ r.file_type | upper }} &middot; {{ (r.file_size / 1024) | round(1) }} KB
+              &middot; layout {{ r.layout or 'auto' }}</span>
+          </td>
+          <td class="nowrap small" data-v="{{ r.uploaded_at }}">{{ r.uploaded_at | when }}</td>
+          <td class="small" data-v="{{ r.source }}">{{ r.source or 'upload' }}</td>
+          <td class="t-num" data-v="{{ r.rows_read }}">{{ r.rows_read }}</td>
+          <td class="t-num {{ 'muted' if not r.rows_skipped }}" data-v="{{ r.rows_skipped }}">
+            {% if r.rows_skipped %}<span>{{ r.rows_skipped }}</span>{% else %}0{% endif %}
+          </td>
+          <td class="t-num" data-v="{{ r.rows_total }}">{{ r.rows_total }}</td>
+          <td class="t-num" data-v="{{ r.target_hits }}"><b>{{ r.target_hits }}</b></td>
+          <td class="t-num" data-v="{{ r.sensitivities }}">{{ r.sensitivities }}</td>
+          <td><span class="pill pill-{{ tone }}">{{ r.status }}</span></td>
+          <td class="small" style="min-width:200px">{{ r.message or '—' }}</td>
+          <td class="nowrap">
+            <a class="btn btn-sm btn-ghost" href="{{ url_for('main.report_page', report_id=r.id) }}">open</a>
+            <a class="btn btn-sm btn-ghost" href="{{ url_for('main.report_download', report_id=r.id) }}">file</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {{ pager(page_no, pages, 'main.reports_page') }}
+  {% else %}
+    {{ empty('No reports stored',
+             'Upload a CSV or PDF lab report and it will appear here with its parse log, its row counts and a link to the original file.',
+             'Upload a report', url_for('main.upload_page')) }}
+    <p class="link-row">
+      <a href="{{ url_for('main.settings_page') }}">Load the demonstration dataset instead</a>
+    </p>
+  {% endif %}
+{% endcall %}
+{% endblock %}

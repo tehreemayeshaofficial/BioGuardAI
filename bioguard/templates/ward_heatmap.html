@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, chart, empty with context %}
+
+{% block title %}Ward heatmap{% endblock %}
+
+{% block chartdata %}
+<script id="chart-data" type="application/json">{{ chart_payload | jsonenc }}</script>
+{% endblock %}
+
+{% block content %}
+{% set window = kpis.window_days %}
+<div class="pagehead">
+  <div>
+    <h1>Ward heatmap</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('api.wards_api', **scope.as_args()) }}">As JSON</a>
+    <a class="btn btn-ghost" href="{{ url_for('api.export_isolates', **scope.as_args()) }}">Export CSV</a>
+  </div>
+</div>
+
+{% include "_ward_heatmap.html" %}
+{% endblock %}

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {# Recorded before anything else renders so the no-JS file picker and the
+     AJAX upload button never both appear. Everything works either way. #}
+  <script>
+    document.documentElement.classList.remove('no-js');
+    document.documentElement.classList.add('js');
+  </script>
+  <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_tagline }}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#129512;</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="page-{{ page or 'main' }}">
+
+{#
+  Left-hand application shell: a fixed surveillance rail on the left, the
+  working content on the right. Icons are keyed to the nav entries so a link
+  still reads cleanly if an icon is ever missing.
+#}
+{% set nav_icons = {
+  'dashboard': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
+  'alerts': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+  'trends': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 14l3.5-3.5 3 3L21 7"/></svg>',
+  'amr': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6l-5 8.5A2 2 0 0 0 6.7 21h10.6a2 2 0 0 0 1.7-3.5L14 9V3"/><path d="M7.5 15h9"/></svg>',
+  'outbreak': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4"/><path d="M12 17h.01"/></svg>',
+  'upload': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/></svg>',
+  'reports': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h5"/></svg>',
+  'lab_reports': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>',
+  'ward_heatmap': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>',
+  'references': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 3v18"/></svg>',
+  'settings': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 0 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 12H3a2 2 0 0 1 0-4h.1A1.6 1.6 0 0 0 4.6 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3.6V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/></svg>'
+} %}
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('main.dashboard') }}">
+      <span class="brand-mark" aria-hidden="true">B</span>
+      <span class="brand-text">
+        <strong>{{ app_name }}</strong>
+        <small>{{ app_tagline }}</small>
+      </span>
+    </a>
+
+    <nav class="nav" aria-label="Sections">
+      {% for heading, items in nav %}
+        <span class="nav-heading">{{ heading }}</span>
+        {% for key, label, url in items %}
+          <a href="{{ url }}"{% if page == key %} class="active" aria-current="page"{% endif %}>
+            {{ (nav_icons[key] if key in nav_icons else '') | safe }}<span>{{ label }}</span>
+          </a>
+        {% endfor %}
+      {% endfor %}
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="user-line"><span>{{ app_name }} v{{ app_version }}</span></div>
+    </div>
+  </aside>
+
+  <div class="main-col">
+
+{#
+  Slim account header. Names the hospital whose isolated workspace is active and
+  exposes a click-to-open profile menu. Shown for signed-in users only, on every
+  screen size - the sidebar identity strip collapses below 820px, so this is the
+  one always-reachable account/sign-out control.
+#}
+{% block topbar %}
+  {% if current_user %}
+  {# Avatar initial from the person's name, skipping any honorific prefix
+     ("Dr. Nadia Rahman" -> "N"), with a safe fallback to the account. #}
+  {% set _display = current_user.ico_officer or current_user.username or '' %}
+  {% set _honorifics = ['dr', 'mr', 'mrs', 'ms', 'mx', 'miss', 'prof', 'doctor', 'rev', 'fr', 'sr'] %}
+  {% set _ini = namespace(ch='') %}
+  {% for _tok in _display.split() %}
+    {% if not _ini.ch and (_tok | lower | replace('.', '')) not in _honorifics %}
+      {% set _ini.ch = _tok[0] | upper %}
+    {% endif %}
+  {% endfor %}
+  {% if not _ini.ch %}{% set _ini.ch = ((current_user.username or 'user')[0] | upper) %}{% endif %}
+  <header class="topbar">
+    <div class="topbar-loc">
+      <span class="topbar-hospital">{{ current_user.hospital_name }}</span>
+    </div>
+    <details class="profile" id="profile-menu">
+      <summary class="profile-btn" aria-label="Account menu">
+        <span class="profile-avatar" aria-hidden="true">{{ _ini.ch }}</span>
+        <span class="profile-name">{{ current_user.ico_officer or current_user.username }}</span>
+        <svg class="profile-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </summary>
+      <div class="profile-menu" role="group" aria-label="Account">
+        <div class="profile-head">
+          <span class="profile-title">{{ current_user.ico_officer or current_user.username }}</span>
+          <span class="profile-role">Infection Control Officer</span>
+          <span class="profile-sub">{{ current_user.hospital_name }}</span>
+        </div>
+        <dl class="profile-list">
+          <div><dt>Workspace</dt><dd>{{ current_user.hospital_name }}</dd></div>
+          {% if current_user.email %}<div><dt>Account</dt><dd>{{ current_user.email }}</dd></div>{% endif %}
+        </dl>
+        <a class="profile-item" href="{{ url_for('main.profile_page') }}">Profile</a>
+        <a class="profile-item" href="{{ url_for('main.account_page') }}">Account settings</a>
+        <a class="profile-item profile-signout" href="{{ url_for('auth.logout') }}">Log out</a>
+      </div>
+    </details>
+  </header>
+  {% endif %}
+{% endblock %}
+
+{% block scopebar %}
+  {% include "_scope.html" %}
+{% endblock %}
+
+<main class="wrap">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flashstack" role="status">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category or 'info' }}">
+            <span class="flash-icon" aria-hidden="true">
+              {%- if category == 'success' %}&#10003;
+              {%- elif category == 'danger' %}&#10007;
+              {%- elif category == 'warning' %}&#33;
+              {%- else %}&#9432;{%- endif -%}
+            </span>
+            <span class="flash-body">{{ message }}</span>
+            <button class="flash-close" type="button" aria-label="Dismiss">&times;</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <span>{{ app_name }} v{{ app_version }}</span>
+  </div>
+</footer>
+
+  </div>{# /.main-col #}
+</div>{# /.app-shell #}
+
+{% block chartdata %}{% endblock %}
+<script src="{{ url_for('static', filename='js/charts.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

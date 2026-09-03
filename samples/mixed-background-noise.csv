@@ -1,0 +1,22 @@
+BIOGUARD REFERRAL LABORATORY
+Page 1 of 3
+Confidential - clinical record
+
+Pat ID,Ward,Collected,Specimen,Organism,Result,Notes
+N-9001,Surgical Ward,28/08/2026,Blood,Klebsiella pn.,Positive,
+N-9002,NICU,27/08/2026,CSF,acinetobacter calcoaceticus/baumannii complex,Positive,"complex name, must still match"
+N-9003,Ward 3,26/08/2026,Urine,E. coli,Positive,
+N-9004,Geriatrics,25/08/2026,Throat swab,Streptococcus sp.,Positive,species not determined
+N-9005,Geriatrics,24/08/2026,Sputum,Streptococcus pneumoniae,Positive,
+N-9006,Ward 5,23/08/2026,Urine,Enterococcus faecium,Positive,VRE screen
+N-9007,Ward 5,22/08/2026,Swab,Coagulase-negative Staphylococcus,Positive,considered skin flora
+N-9008,Ward 5,21/08/2026,Stool,Candida albicans,Positive,"yeast, not tracked"
+N-9009,Ward 12,20/08/2026,Sputum,Lactobacillus spp.,Positive,
+N-9010,Ward 12,19/08/2026,Urine,,Negative,no growth after 48h
+N-9011,Emergency Department,46256,Blood,Proteus mirabilis,Positive,
+N-9012,Emergency Department,46253,Wound,Serratia marcescens,Positive,
+N-9013,Oncology,16/08/2026,Blood,Psedomonas aeruginosa,Positive,misspelled in the source system
+
+Note: all results relate to the specimens listed above.
+www.bioguard.invalid - synthetic data
+"*R = resistant, S = susceptible, I = intermediate"

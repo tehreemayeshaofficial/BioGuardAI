@@ -1,0 +1,95 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 3788 >>
+stream
+BT /F1 13 Tf 1 0 0 1 48.00 790.05 Tm (NORTHGATE GENERAL HOSPITAL        MICROBIOLOGY DEPARTMENT) Tj ET
+BT /F1 7 Tf 1 0 0 1 48.00 775.13 Tm (ANTIMICROBIAL SUSCEPTIBILITY REPORT          Generated automatically) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 762.77 Tm ( ) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 748.77 Tm (PATIENT AND SPECIMEN) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 734.45 Tm (Patient ID:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 734.77 Tm (S-6001) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 721.45 Tm (Patient Name:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 721.77 Tm (Marchetti, L) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 708.45 Tm (Ward:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 708.77 Tm (ICU) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 695.45 Tm (Room:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 695.77 Tm (07) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 682.45 Tm (Specimen:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 682.77 Tm (Endotracheal aspirate) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 669.45 Tm (Collected:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 669.77 Tm (27 Aug 2026) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 656.45 Tm (Reported:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 656.77 Tm (29 Aug 2026) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 643.77 Tm ( ) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 629.77 Tm (DIRECT ANTIGEN DETECTION / CULTURE) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 615.45 Tm (Organism:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 615.77 Tm (Pseudomonas aeruginosa) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 602.77 Tm (Sensitivity) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 588.77 Tm (Piperacillin/Tazobactam ..... S  <=4/4) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 575.77 Tm (Ceftazidime ................ R  >32) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 562.77 Tm (Meropenem .................. R  16) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 549.77 Tm (Imipenem ................... R  >=8) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 536.77 Tm (Ciprofloxacin .............. R  >4) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 523.77 Tm (Amikacin ................... S  8) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 510.77 Tm (Colistin ................... S  0.5) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 497.77 Tm (Ceftolozane/Tazobactam ..... S  <=1) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 484.77 Tm ( ) Tj ET
+BT /F1 7 Tf 1 0 0 1 48.00 470.13 Tm (S = susceptible, I = intermediate, R = resistant) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 457.77 Tm ( ) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 443.77 Tm (SECOND ISOLATE FROM THE SAME PATIENT) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 429.45 Tm (Organism:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 429.77 Tm (Stenotrophomonas maltophilia) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 416.77 Tm (Sensitivity) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 402.77 Tm (Co-trimoxazole ............. S  <=2) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 389.77 Tm (Levofloxacin ............... R  8) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 376.77 Tm ( ) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 362.77 Tm (NEW PATIENT BLOCK) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 348.45 Tm (Patient ID:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 348.77 Tm (S-6008) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 335.45 Tm (Ward:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 335.77 Tm (NICU) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 322.45 Tm (Date of Collection:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 322.77 Tm (25 Aug 2026) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 309.45 Tm (Specimen Type:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 309.77 Tm (faecal swab) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 296.45 Tm (Organism Identified:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 296.77 Tm (Salmonella enteritidis) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 283.77 Tm (Sensitivity) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 269.77 Tm (Ceftriaxone ....... S) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 256.77 Tm (Azithromycin ...... S) Tj ET
+BT /F1 9 Tf 1 0 0 1 62.00 243.77 Tm (Ciprofloxacin ..... R  >4) Tj ET
+BT /F1 9 Tf 1 0 0 1 48.00 230.77 Tm ( ) Tj ET
+BT /F1 8 Tf 1 0 0 1 48.00 216.45 Tm (Comment:) Tj ET
+BT /F1 9 Tf 1 0 0 1 166.00 216.77 Tm (Notified to the health protection team on the 29 Aug 2026.) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000218 00000 n 
+0000000313 00000 n 
+0000000455 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+4295
+%%EOF

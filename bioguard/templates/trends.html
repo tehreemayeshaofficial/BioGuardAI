@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, pill, kpi, delta, empty, cluster, chart,
+                                spark, sorttable with context %}
+
+{% block title %}Infection trends{% endblock %}
+
+{% block chartdata %}
+<script id="chart-data" type="application/json">{{ chart_payload | jsonenc }}</script>
+{% endblock %}
+
+{% block content %}
+{% set window = kpis.window_days %}
+<div class="pagehead">
+  <div>
+    <h1>Infection trends</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('api.trends_api', **scope.as_args()) }}">As JSON</a>
+    <a class="btn btn-ghost" href="{{ url_for('api.export_isolates', **scope.as_args()) }}">Export CSV</a>
+  </div>
+</div>
+
+{# ------------------------------------------------------------------ kpis #}
+<div class="kpis">
+  {{ kpi('Organisms with data', rows | length ~ ' / 12',
+         view.undetected | length ~ ' target organism(s) not found', 'info') }}
+  {{ kpi('Rising or emerging', rising | length,
+         rising | map(attribute='pathogen_display') | join(', ') or 'none',
+         'high' if rising | length > 2 else ('medium' if rising else 'low')) }}
+  {{ kpi('In &ge;2 patients recently', multi_patient | length,
+         'within the last ' ~ window ~ ' days', '',
+         'Two or more distinct patients with the same organism in the recent window - the first test for person-to-person spread.') }}
+  {{ kpi('Spanning &ge;2 wards', multi_ward | length,
+         'cross-unit spread', 'high' if multi_ward | length > 1 else '',
+         'The same organism in more than one ward inside the recent window points at a shared source or staff vector rather than a single-bed incident.') }}
+  {{ kpi('Detection clusters', clusters | length,
+         ward_clusters | length ~ ' confined to one ward', 'info',
+         'Groups of same-organism cases exceeding the endemic expectation inside a ' ~ cluster_window_days ~ '-day window, with an epidemiological link.') }}
+  {{ kpi('Wards reporting', wards | length,
+         (wards | selectattr('high_consequence') | list | length) ~ ' protected cohort' ~ ('s' if (wards | selectattr('high_consequence') | list | length) != 1 else ''),
+         '') }}
+</div>
+
+{# ------------------------------------------------------- shape of the wave #}
+<div class="grid2">
+  {% call panel('Weekly incidence by organism') %}
+    {{ chart('timeline', 'chart-timeline', 280, 'week beginning',
+             'legend names toggle a series on and off') }}
+  {% endcall %}
+
+  {% call panel('Volume, patients and resistance together') %}
+    {{ chart('cases', 'chart-cases', 280, 'week beginning',
+             'isolates shaded, MDR dashed') }}
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------------ the trend register #}
+{% call panel('Trend register') %}
+  {% if rows %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-trends">
+      <caption class="visually-hidden">Incidence trend per tracked organism</caption>
+      <thead>
+        <tr>
+          <th data-sort="organism"><button type="button">Organism</button></th>
+          <th data-sort="direction"><button type="button">Direction</button></th>
+          <th class="t-num" data-sort="recent"><button type="button">Last {{ window }}d</button></th>
+          <th class="t-num" data-sort="baseline"><button type="button">Previous {{ window }}d</button></th>
+          <th class="t-num" data-sort="change"><button type="button">Change</button></th>
+          <th class="t-num" data-sort="patients"><button type="button">Patients</button></th>
+          <th class="t-num" data-sort="wards"><button type="button">Wards</button></th>
+          <th data-sort="shape"><button type="button">Shape</button></th>
+          <th class="t-num" data-sort="total"><button type="button">All isolates</button></th>
+          <th class="t-num" data-sort="mdr"><button type="button">MDR+</button></th>
+          <th data-sort="concentration"><button type="button">Concentration</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="{{ 'row-high' if r.direction in ('rising', 'emerging') }}">
+          <td>
+            <a href="{{ url_for('main.pathogen_page', key=r.pathogen, **scope.as_args()) }}">
+              {{ r.pathogen_display }}</a>
+            <span class="sub">{{ r.full_name }}</span>
+            {% if r.genus_only %}<span class="tag tag-off">genus-level</span>{% endif %}
+            {% if r.low_confidence %}<span class="tag tag-off">low confidence</span>{% endif %}
+          </td>
+          <td>
+            {% if r.direction == 'emerging' %}<span class="pill pill-high">Emerging</span>
+            {% elif r.direction == 'rising' %}<span class="pill pill-medium">Rising</span>
+            {% elif r.direction == 'falling' %}<span class="pill pill-low">Falling</span>
+            {% else %}<span class="pill pill-none">Stable</span>{% endif %}
+          </td>
+          <td class="t-num" data-v="{{ r.recent }}"><b>{{ r.recent }}</b></td>
+          <td class="t-num" data-v="{{ r.baseline }}">{{ r.baseline }}</td>
+          <td class="t-num">{{ delta(r.change_pct) }}</td>
+          <td class="t-num" data-v="{{ r.patients }}">{{ r.patients }}
+            <span class="sub">{{ r.recent_patients }} recent</span></td>
+          <td class="t-num" data-v="{{ r.wards }}">{{ r.wards }}
+            {% if r.multi_ward %}<span class="sub">multi-ward</span>{% endif %}</td>
+          <td>{{ spark(r.weekly, r.color) }}</td>
+          <td class="t-num" data-v="{{ r.total }}">{{ r.total }}</td>
+          <td class="t-num" data-v="{{ r.mdr_rate }}">{{ r.mdr_rate }}%</td>
+          <td>
+            {% if r.top_ward %}
+              <span class="nowrap">{{ r.top_ward }}</span>
+              <span class="sub">{{ r.top_ward_count }} of {{ r.total }} isolate{{ '' if r.total == 1 else 's' }}</span>
+            {% else %}<span class="muted">&mdash;</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('No tracked organism in this scope',
+             'Widen the date range or clear the ward filter, or upload a lab report that names one of the twelve target species.',
+             'Upload a report', url_for('main.upload_page')) }}
+  {% endif %}
+{% endcall %}
+
+{# ------------------------------------------- the two spread questions #}
+<div class="grid2">
+  {% call panel('Same bacteria, multiple patients') %}
+    {% if multi_patient %}
+    <div class="tablewrap">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Organism</th>
+            <th class="t-num">Patients</th>
+            <th class="t-num">Wards</th>
+            <th class="t-num">Per week</th>
+            <th>Resistance markers</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in multi_patient | sort(attribute='recent_patients', reverse=true) %}
+          <tr>
+            <td><a href="{{ url_for('main.pathogen_page', key=r.pathogen, **scope.as_args()) }}">{{ r.pathogen_display }}</a></td>
+            <td class="t-num"><b>{{ r.recent_patients }}</b><span class="sub">{{ r.patients }} total</span></td>
+            <td class="t-num">{{ r.recent_wards }}<span class="sub">{{ r.wards }} total</span></td>
+            <td class="t-num">{{ r.patients_per_week }}</td>
+            <td>
+              {% if r.markers %}
+                <ul class="tag-list">
+                  {% for m, n in (r.markers.items() | list)[:4] %}<li class="tag tag-marker">{{ m }} &times;{{ n }}</li>{% endfor %}
+                </ul>
+              {% else %}<span class="muted small">none reported</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      {{ empty('No organism currently involves two patients',
+               'Every tracked organism in the last ' ~ window ~ ' days sits in a single host, so none of them can be linked epidemiologically yet.') }}
+    {% endif %}
+  {% endcall %}
+
+  {% call panel('Same bacteria, multiple wards') %}
+    {% if multi_ward %}
+    <ul class="findings">
+      {% for r in multi_ward | sort(attribute='recent_wards', reverse=true) %}
+      <li class="finding finding-{{ 'high' if r.recent_wards >= 3 else 'medium' }}">
+        <div class="finding-head">
+          <h3><a href="{{ url_for('main.pathogen_page', key=r.pathogen, **scope.as_args()) }}">{{ r.pathogen_display }}</a></h3>
+          <span class="finding-badge">{{ r.recent_wards }} wards recently</span>
+        </div>
+        <p class="finding-detail">
+          {% for wc in r.ward_counts[:6] %}{{ wc.ward }} ({{ wc.count }}){{ '&middot;' if not loop.last }} {% endfor %}
+        </p>
+        <p class="finding-meta">
+          {{ r.recent_patients }} recent patients &middot; {{ r.recent }} isolates in the last
+          {{ window }} days &middot; MDR+ {{ r.mdr_rate }}%
+        </p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      {{ empty('No organism spans two wards in the recent window',
+               'Each organism currently sits inside a single unit, which keeps the exposure assessment contained to that ward.') }}
+    {% endif %}
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------------------- ward matrix #}
+<span id="ward-heatmap" aria-hidden="true"></span>
+{% include "_ward_heatmap.html" %}
+
+{# --------------------------------------------------------------- clusters #}
+<div class="grid2">
+  {% call panel('Detection clusters') %}
+    {% if clusters %}
+    <ul class="clusters">
+      {% for c in clusters %}{{ cluster(c, true) }}{% endfor %}
+    </ul>
+    <p class="link-row"><a href="{{ url_for('main.outbreak_page', **scope.as_args()) }}">See how these score into outbreak risk</a></p>
+    {% else %}
+      {{ empty('No cluster exceeds expectation',
+               'Every group of same-organism cases seen so far is within what this hospital reports anyway for that species.') }}
+    {% endif %}
+  {% endcall %}
+
+  {% call panel('Ward-confined clusters') %}
+    {% if ward_clusters %}
+    <ul class="clusters">
+      {% for c in ward_clusters %}{{ cluster(c, true) }}{% endfor %}
+    </ul>
+    {% else %}
+      {{ empty('No single ward holds three patients with the same organism',
+               'Two unrelated cases of a common species on a busy ward are background noise, so they are deliberately not raised.') }}
+    {% endif %}
+  {% endcall %}
+</div>
+
+{# --------------------------------------------------------------- non-target #}
+{% if view.others %}
+{% call panel('Organisms present but not tracked') %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-others">
+      <thead>
+        <tr>
+          <th data-sort="label"><button type="button">Reported as</button></th>
+          <th class="t-num" data-sort="count"><button type="button">Isolates</button></th>
+          <th class="t-num" data-sort="patients"><button type="button">Patients</button></th>
+          <th data-sort="method"><button type="button">How it was read</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in view.others %}
+        <tr>
+          <td><i>{{ o.label }}</i>
+            {% if o.raw and o.raw != o.label %}<span class="sub">as written: {{ o.raw }}</span>{% endif %}</td>
+          <td class="t-num" data-v="{{ o.count }}">{{ o.count }}</td>
+          <td class="t-num" data-v="{{ o.patients }}">{{ o.patients }}</td>
+          <td class="small">{{ o.method }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+{% endif %}
+{% endblock %}

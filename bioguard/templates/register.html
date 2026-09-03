@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create account · {{ app_name }}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#129512;</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="auth-body">
+  <main class="auth-wrap">
+    <form class="auth-card" method="post" action="{{ url_for('auth.register') }}" novalidate>
+      <div class="auth-brand">
+        <span class="brand-mark" aria-hidden="true">B</span>
+        <span class="auth-brand-text">
+          <strong>{{ app_name }}</strong>
+          <small>{{ app_tagline }}</small>
+        </span>
+      </div>
+
+      <h1>Create account</h1>
+      <p class="auth-sub">Register your hospital's infection-prevention team.</p>
+
+      {% if error %}<div class="auth-error" role="alert">{{ error }}</div>{% endif %}
+
+      <label for="r-hospital">Hospital Name
+        <input id="r-hospital" name="hospital_name" type="text" autocomplete="organization"
+               value="{{ hospital_name }}" placeholder="e.g. St. Mary's General" required>
+      </label>
+      <label for="r-officer">ICO Officer Name
+        <input id="r-officer" name="ico_officer" type="text" autocomplete="name"
+               value="{{ ico_officer }}" placeholder="Infection Control Officer">
+      </label>
+      <label for="r-email">Email
+        <input id="r-email" name="email" type="email" autocomplete="email"
+               value="{{ email }}" placeholder="you@hospital.org" required>
+      </label>
+      <label for="r-pass">Password
+        <input id="r-pass" name="password" type="password" autocomplete="new-password"
+               minlength="6" required>
+      </label>
+      <label for="r-confirm">Confirm Password
+        <input id="r-confirm" name="confirm_password" type="password" autocomplete="new-password"
+               minlength="6" required>
+      </label>
+
+      <button class="auth-btn" type="submit">Register</button>
+
+      <p class="auth-alt">Already registered?
+        <a href="{{ url_for('auth.login') }}">Sign in</a></p>
+    </form>
+  </main>
+</body>
+</html>

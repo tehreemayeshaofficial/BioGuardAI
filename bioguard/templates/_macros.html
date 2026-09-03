@@ -1,0 +1,219 @@
+{#
+  Shared presentation fragments.
+
+  Everything here is deliberately dumb: it renders a dictionary produced by an
+  analysis engine and never recomputes a statistic. If a number is not in the
+  payload, it does not belong on the page.
+#}
+
+{% macro panel(title) %}
+<section class="panel">
+  {% if title %}
+    <header class="panel-head">
+      <div>
+        <h2>{{ title }}</h2>
+      </div>
+    </header>
+  {% endif %}
+  <div class="panel-body">{{ caller() if caller }}</div>
+</section>
+{% endmacro %}
+
+
+{% macro pill(level, text='') -%}
+<span class="pill pill-{{ level | risk_class }}">{{ text or level }}</span>
+{%- endmacro %}
+
+
+{% macro scorebar(score, level, max=100) -%}
+{% set width = [(score / max * 100) | round(1), 100] | min %}
+<span class="scorebar">
+  <span class="scorebar-fill scorebar-{{ level | risk_class }}" style="width: {{ width }}%"></span>
+  <b>{{ score }}</b>
+</span>
+{%- endmacro %}
+
+
+{% macro kpi(label, value, sub='', tone='', hint='', range=false) -%}
+{# `range=true` marks a value that must stay on one line (the covered-date
+   range); the stylesheet gives that card enough width. #}
+<div class="kpi kpi-{{ tone or 'neutral' }}{{ ' kpi-range' if range }}">
+  <span class="kpi-label">{{ label }}</span>
+  <span class="kpi-value">{{ value }}</span>
+  {% if sub %}<span class="kpi-sub">{{ sub|safe }}</span>{% endif %}
+</div>
+{%- endmacro %}
+
+
+{% macro delta(value, unit='%', good_is_down=true) -%}
+{% if value is none %}<span class="delta delta-none">n/a</span>
+{% else %}
+{% set up = value > 0 %}
+<span class="delta {{ 'delta-up' if up else ('delta-down' if value < 0 else 'delta-flat') }}
+      {% if value != 0 and ((up and good_is_down) or (not up and not good_is_down)) %}delta-bad{% endif %}">
+  {{- '▲' if up else ('▼' if value < 0 else '=') }} {{ value | abs }}{{ unit -}}
+</span>
+{% endif %}
+{%- endmacro %}
+
+
+{% macro meter(rate, tested=0, critical=false, label='') -%}
+{% set tone = 'critical' if critical and rate >= 30 else ('high' if rate >= 50 else
+              ('warn' if rate >= 20 else 'ok')) %}
+<span class="meter{% if critical %} meter-critical{% endif %}">
+  <span class="meter-track"><span class="meter-fill meter-{{ tone }}" style="width: {{ [rate, 100] | min }}%"></span></span>
+  <span class="meter-value">{{ rate }}%</span>
+</span>
+{%- endmacro %}
+
+
+{% macro empty(title, body='', cta_label='', cta_url='') -%}
+<div class="empty">
+  <h3>{{ title }}</h3>
+  {% if body %}<p>{{ body }}</p>{% endif %}
+  {% if cta_label %}<a class="btn" href="{{ cta_url }}">{{ cta_label }}</a>{% endif %}
+</div>
+{%- endmacro %}
+
+
+{% macro sorttable(id, headers, body, caption='') %}
+<div class="tablewrap">
+  <table class="grid" id="{{ id }}" data-sortable>
+    {% if caption %}<caption>{{ caption }}</caption>{% endif %}
+    <thead>
+      <tr>
+        {% for label, key, align in headers %}
+          <th data-sort="{{ key }}" {% if align %}class="t-{{ align }}"{% endif %}>
+            <button type="button">{{ label }}</button>
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>{{ body() if body is callable else body }}</tbody>
+  </table>
+</div>
+{% endmacro %}
+
+
+{# Jinja macros take no **kwargs, so the extra query arguments arrive as a dict. #}
+{% macro pager(page, pages, endpoint, args={}) %}
+{% if pages > 1 %}
+<nav class="pager" aria-label="Pages">
+  {% if page > 1 %}<a href="{{ url_for(endpoint, page=page - 1, **args) }}" rel="prev">&lsaquo;</a>{% endif %}
+  {% for n in range(1, pages + 1) %}
+    {% if n == page %}<span class="pager-cur" aria-current="page">{{ n }}</span>
+    {% elif n <= 2 or n > pages - 2 or (n - page) | abs <= 2 %}
+      <a href="{{ url_for(endpoint, page=n, **args) }}">{{ n }}</a>
+    {% elif (n - page) | abs == 3 %}
+      <span class="pager-gap">&hellip;</span>
+    {% endif %}
+  {% endfor %}
+  {% if page < pages %}<a href="{{ url_for(endpoint, page=page + 1, **args) }}" rel="next">&rsaquo;</a>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+
+{% macro cluster(c, show_excess=true) %}
+<li class="cluster">
+  <div class="cluster-head">
+    <a class="cluster-organism" href="{{ url_for('main.pathogen_page', key=c.pathogen, **scope.as_args()) }}">
+      {{ c.pathogen_display }}</a>
+    <span class="cluster-count">{{ c.n_patients }} patient{{ '' if c.n_patients == 1 else 's' }}</span>
+    {% if c.ward_confined %}
+      <span class="tag tag-ward">{{ c.wards[0] }}</span>
+    {% else %}
+      <span class="tag">{{ c.n_wards }} wards</span>
+    {% endif %}
+    {% if c.mdr %}<span class="tag tag-mdr">{{ c.mdr }} MDR+</span>{% endif %}
+    {% for m in c.markers[:3] %}<span class="tag tag-marker">{{ m }}</span>{% endfor %}
+  </div>
+  <div class="cluster-meta">
+    <span>{{ c.start | iso_date }} &rarr; {{ c.end | iso_date }} ({{ c.span_days }}d)</span>
+    <span>{{ c.rate_per_week }}/week</span>
+    {% if show_excess and c.expected_patients %}
+      <span class="cluster-excess">{{ c.excess }}&times; endemic expectation</span>
+    {% endif %}
+  </div>
+  <details class="cluster-patients">
+    <summary>{{ c.patients | length }} patient IDs &middot; {{ c.isolates }} isolates</summary>
+    <p>{{ c.patients | join(', ') }}</p>
+  </details>
+</li>
+{% endmacro %}
+
+
+{% macro component_table(components) %}
+<table class="breakdown">
+  <tbody>
+    {% for c in components %}
+    <tr class="{% if c.points == 0 %}is-quiet{% endif %}">
+      <th scope="row">{{ c.label }}</th>
+      <td class="t-score"><b>{{ c.points }}</b><span class="of">/{{ c.max_points }}</span></td>
+      <td class="t-bar"><span class="mini"><span style="width: {{ [100 * c.points / (c.max_points or 1), 100] | min }}%"></span></span></td>
+      <td class="t-detail">{{ c.detail }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+
+{# A 0-100 risk score drawn as a percentage ring. Geometry lives in SVG
+   attributes (stroke-dasharray) so it needs neither CSS nor JavaScript. #}
+{% macro risk_gauge(score, color='#ef4444', label='risk', sub='') -%}
+{% set s = score | float %}
+{% set shown = s | round | int %}
+{% set pct = ([s, 0] | max) if s <= 100 else 100 %}
+{% set dash = (pct / 100 * 326.7) | round(1) %}
+<svg class="gauge" viewBox="0 0 120 120" role="img"
+     aria-label="{{ label }}: {{ shown }} percent">
+  <circle class="gauge-track" cx="60" cy="60" r="52"/>
+  <circle class="gauge-fill" cx="60" cy="60" r="52" stroke="{{ color }}"
+          stroke-dasharray="{{ dash }} 326.7"/>
+  <text class="gauge-value" x="60" y="58" text-anchor="middle">{{ shown }}%</text>
+  <text class="gauge-label" x="60" y="76" text-anchor="middle">{{ sub or label }}</text>
+</svg>
+{%- endmacro %}
+
+
+{% macro reasons(items, title='Why this level') %}
+{% if items %}
+<div class="reasons">
+  <h4>{{ title }}</h4>
+  <ol>{% for r in items %}<li>{{ r }}</li>{% endfor %}</ol>
+</div>
+{% endif %}
+{% endmacro %}
+
+
+{# A chart placeholder. charts.js finds it by data-chart and paints inline SVG
+   from the page's single JSON payload, so the markup here stays meaningful
+   with scripting turned off - the panels around it carry the same numbers. #}
+{% macro chart(kind, id, height=260, title='', note='') %}
+<figure class="chart" style="--chart-h: {{ height }}px">
+  <figcaption>
+    {% if title %}<span>{{ title }}</span>{% endif %}
+  </figcaption>
+  <div class="chart-host" id="{{ id }}" data-chart="{{ kind }}"></div>
+</figure>
+{% endmacro %}
+
+
+{# A weekly incidence sparkline, drawn as SVG so it needs no JavaScript. #}
+{% macro spark(values, color='#38bdf8', w=96, h=24) %}
+{% set n = values | length %}
+{% if n > 1 %}
+{% set peak = (values | max) or 1 %}
+<svg class="spark" viewBox="0 0 {{ w }} {{ h }}" width="{{ w }}" height="{{ h }}"
+     preserveAspectRatio="none" role="img" aria-label="weekly isolates, peak {{ peak }}">
+  <polyline
+    points="{% for v in values %}{{ (loop.index0 * w / (n - 1)) | round(1) }},{{ (h - 2 - (v / peak) * (h - 5)) | round(1) }} {% endfor %}"
+    fill="none" stroke="{{ color }}" stroke-width="1.5"
+    stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <polygon
+    points="0,{{ h }} {% for v in values %}{{ (loop.index0 * w / (n - 1)) | round(1) }},{{ (h - 2 - (v / peak) * (h - 5)) | round(1) }} {% endfor %}{{ w }},{{ h }}"
+    fill="{{ color }}" opacity=".12" stroke="none"/>
+</svg>
+{% endif %}
+{% endmacro %}

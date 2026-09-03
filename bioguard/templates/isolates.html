@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, pill, kpi, empty with context %}
+
+{% block title %}Isolate browser{% endblock %}
+
+{% block content %}
+{% set first = offset + 1 %}
+{% set last = [offset + limit, table.total] | min %}
+{% set from_args = scope.as_args() %}
+<div class="pagehead">
+  <div>
+    <h1>Isolate browser</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('api.export_isolates', **from_args) }}">Export scope as CSV</a>
+    <a class="btn btn-ghost" href="{{ url_for('api.isolates_api', limit=100, offset=offset, **from_args) }}">As JSON</a>
+    <a class="btn" href="{{ url_for('main.upload_page') }}">Upload report</a>
+  </div>
+</div>
+
+<div class="kpis">
+  {{ kpi('Rows in scope', table.total | num,
+         kpis.isolates | num ~ ' tracked, ' ~ (table.total - kpis.isolates) | num ~ ' other', 'info') }}
+  {{ kpi('Tracked isolates', kpis.isolates | num,
+         kpis.patients | num ~ ' patients &middot; ' ~ kpis.wards ~ ' wards') }}
+  {{ kpi('Susceptibility results', kpis.sensitivities | num,
+         'across ' ~ kpis.isolates | num ~ ' tracked isolates', '') }}
+  {{ kpi('Distinct organisms', kpis.pathogens_seen ~ ' / 12',
+         others | length ~ ' non-target label' ~ ('s' if others | length != 1 else '') ~ ' seen',
+         'low' if kpis.pathogens_seen else '') }}
+  {{ kpi('Reports imported', kpis.reports | num,
+         'see the upload audit trail', '') }}
+</div>
+
+{# ------------------------------------------------------------------ search #}
+{% call panel('Find a row') %}
+  <form class="split" method="get" action="{{ url_for('main.isolates_page') }}">
+    <div class="scope-field" style="flex:2 1 320px">
+      <label for="q">Search this scope</label>
+      <input id="q" type="search" name="q" value="{{ search }}"
+             placeholder="P-1042, ICU, blood, MRSA, blaKPC&hellip;">
+    </div>
+    <div class="scope-field">
+      <label for="limit">Rows per page</label>
+      <select id="limit" name="limit">
+        {% for n in (25, 50, 100, 250, 500) %}
+        <option value="{{ n }}"{% if n == limit %} selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% for key, value in from_args.items() %}
+      {% if key != 'include_nontarget' %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}
+    {% endfor %}
+    <input type="hidden" name="include_nontarget" value="{{ '1' if scope.include_nontarget else '0' }}">
+    <div class="scope-field">
+      <label>&nbsp;</label>
+      <button type="submit" class="btn">Search</button>
+    </div>
+  </form>
+  {% if search %}
+  <p class="link-row">
+    <span class="small muted">Filtering for &ldquo;<b>{{ search }}</b>&rdquo;.</span>
+    <a class="small" href="{{ url_for('main.isolates_page', **from_args) }}">Clear the search</a>
+  </p>
+  {% endif %}
+  <div class="search" style="margin-top:.6rem">
+    <input type="search" id="q-rows" data-filter="tbl-isolates"
+           placeholder="Instant filter of the rows below"
+           aria-label="Filter the rows on this page">
+  </div>
+  <span class="small muted" data-filter-count="q-rows" style="display:block;margin:.3rem 0 .5rem">{{ table.rows | length }} rows on this page</span>
+{% endcall %}
+
+{# ------------------------------------------------------------------- table #}
+{% call panel('Isolates') %}
+  {% if table.rows %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-isolates">
+      <thead>
+        <tr>
+          <th data-sort="date"><button type="button">Sample date</button></th>
+          <th data-sort="patient"><button type="button">Patient</button></th>
+          <th data-sort="ward"><button type="button">Ward</button></th>
+          <th data-sort="specimen"><button type="button">Specimen</button></th>
+          <th data-sort="reported"><button type="button">Reported as</button></th>
+          <th data-sort="organism"><button type="button">Matched organism</button></th>
+          <th data-sort="conf"><button type="button">Confidence</button></th>
+          <th data-sort="markers"><button type="button">Markers</button></th>
+          <th data-sort="class"><button type="button">Class</button></th>
+          <th class="t-num" data-sort="tested"><button type="button">Tested</button></th>
+          <th data-sort="resistant"><button type="button">Resistant to</button></th>
+          <th data-sort="report"><button type="button">Source</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in table.rows %}
+        <tr class="{{ 'row-high' if r.class in ('XDR', 'PDR') else ('row-medium' if r.class == 'MDR') }}">
+          <td class="nowrap mono" data-v="{{ r.date }}">{{ r.date | iso_date }}</td>
+          <td class="mono">{{ r.patient_id }}</td>
+          <td>{{ r.ward or '—' }}</td>
+          <td class="small">{{ r.specimen or '—' }}</td>
+          <td class="small"><i>{{ r.organism_raw }}</i></td>
+          <td>
+            {% if r.pathogen %}
+              <a href="{{ url_for('main.pathogen_page', key=r.pathogen, **from_args) }}">{{ r.pathogen_display }}</a>
+            {% else %}
+              <span class="tag tag-off">{{ r.pathogen_display }}</span>
+            {% endif %}
+            {% if r.genus_only %}<span class="sub">genus-level match</span>{% endif %}
+          </td>
+          <td data-v="{{ r.confidence }}">
+            <span class="mini"><span style="width: {{ (r.confidence * 100) | round(0) | int }}%"></span></span>
+            <span class="sub">{{ (r.confidence * 100) | round(0) | int }}% &middot; {{ r.method }}</span>
+          </td>
+          <td>{% if r.markers %}<ul class="tag-list">{% for m in r.markers %}<li class="tag tag-marker">{{ m }}</li>{% endfor %}</ul>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if r.class == 'PDR' or r.class == 'XDR' %}<span class="pill pill-high">{{ r.class }}</span>
+            {% elif r.class == 'MDR' %}<span class="pill pill-medium">MDR</span>
+            {% elif r.class %}<span class="pill pill-low">{{ r.class }}</span>
+            {% else %}<span class="muted small">no panel</span>{% endif %}
+          </td>
+          <td class="t-num" data-v="{{ r.n_tested }}">{{ r.n_tested }}</td>
+          <td class="small">
+            {% if r.resistant %}
+            <details>
+              <summary>{{ r.resistant | length }} agent{{ '' if r.resistant | length == 1 else 's' }}</summary>
+              <p style="margin-top:.25rem">{{ r.resistant | join(', ') }}</p>
+            </details>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td><a class="small" href="{{ url_for('main.report_page', report_id=r.report_id) }}">#{{ r.report_id }}</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# Offset paging, because this browser walks a filtered set rather than a
+     fixed page count. Keep the scope and search on every link. #}
+  <nav class="pager" aria-label="Isolate pages">
+    {% if offset > 0 %}
+      <a rel="prev" href="{{ url_for('main.isolates_page', limit=limit, offset=[0, offset - limit] | max, q=search, **from_args) }}">&lsaquo; Previous {{ limit }}</a>
+    {% endif %}
+    <span class="pager-cur" aria-current="page">{{ first }}&ndash;{{ last }} of {{ table.total }}</span>
+    {% if last < table.total %}
+      <a rel="next" href="{{ url_for('main.isolates_page', limit=limit, offset=offset + limit, q=search, **from_args) }}">Next {{ limit }} &rsaquo;</a>
+    {% endif %}
+  </nav>
+  {% elif table.total %}
+    {{ empty('No rows on this page',
+             'The offset is past the end of the result set - use the first-page link in the browser or reduce the rows per page.') }}
+    <p class="link-row"><a href="{{ url_for('main.isolates_page', **from_args) }}">Back to the first row</a></p>
+  {% else %}
+    {{ empty('No isolate rows in this scope',
+             'Either nothing has been uploaded yet, or the filters exclude every row. The database may still hold data outside this scope.',
+             'Upload a lab report', url_for('main.upload_page')) }}
+    <p class="link-row">
+      <a href="{{ url_for('main.filters_clear', next=request.path) }}">Clear all filters</a>
+      <a href="{{ url_for('main.reports_page') }}">Upload audit trail</a>
+    </p>
+  {% endif %}
+{% endcall %}
+
+{# --------------------------------------------------------------- non-target #}
+{% if others %}
+{% call panel('Reported but not tracked') %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-others">
+      <thead>
+        <tr>
+          <th data-sort="label"><button type="button">Organism as reported</button></th>
+          <th class="t-num" data-sort="count"><button type="button">Isolates</button></th>
+          <th class="t-num" data-sort="patients"><button type="button">Patients</button></th>
+          <th data-sort="method"><button type="button">How it was read</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in others %}
+        <tr>
+          <td><i>{{ o.label }}</i>
+            {% if o.raw and o.raw != o.label %}<span class="sub">as written: {{ o.raw }}</span>{% endif %}</td>
+          <td class="t-num" data-v="{{ o.count }}">{{ o.count }}</td>
+          <td class="t-num" data-v="{{ o.patients }}">{{ o.patients }}</td>
+          <td class="small">{{ o.method }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endcall %}
+{% endif %}
+{% endblock %}

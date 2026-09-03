@@ -1,0 +1,68 @@
+{#
+  Shared Ward Heatmap section.
+
+  Rendered inline by templates/trends.html (behind the #ward-heatmap anchor) and
+  by the dedicated templates/ward_heatmap.html page, so the chart + table markup
+  has exactly one source of truth. Purely presentational: it reads the already
+  computed ``wards`` (Insights.ward_rows -> trends.ward_matrix), the page's
+  ``chart_payload`` ward series and ``view.detection_grid`` for the stack key.
+  It performs no analytics and issues no queries.
+
+  Expects in scope: ``wards`` (list of ward rows), ``window`` (recent-window
+  days) and ``view`` (the Insights object, for detection_grid).
+#}
+{% from "_macros.html" import panel, chart, empty with context %}
+{% call panel('Ward heatmap') %}
+  {% if wards %}
+  {{ chart('wards', 'chart-wards', 220, 'ward', 'the dark segment is the recent ' ~ window ~ '-day window') }}
+  <div class="tablewrap" style="margin-top:.8rem">
+    <table class="grid" data-sortable id="tbl-wards">
+      <thead>
+        <tr>
+          <th data-sort="ward"><button type="button">Ward</button></th>
+          <th class="t-num" data-sort="isolates"><button type="button">Isolates</button></th>
+          <th class="t-num" data-sort="patients"><button type="button">Patients</button></th>
+          <th class="t-num" data-sort="recent"><button type="button">Last {{ window }}d</button></th>
+          <th class="t-num" data-sort="species"><button type="button">Species</button></th>
+          <th data-sort="mix"><button type="button">Organism mix</button></th>
+          <th class="t-num" data-sort="mdr"><button type="button">MDR+</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in wards %}
+        <tr>
+          <td>
+            <b>{{ w.ward or 'Unallocated' }}</b>
+            {% if w.high_consequence %}<span class="tag tag-protected">protected cohort</span>{% endif %}
+          </td>
+          <td class="t-num" data-v="{{ w.isolates }}">{{ w.isolates }}</td>
+          <td class="t-num" data-v="{{ w.patients }}">{{ w.patients }}</td>
+          <td class="t-num" data-v="{{ w.recent }}">{{ w.recent }}
+            <span class="sub">{{ w.recent_patients }} patient{{ '' if w.recent_patients == 1 else 's' }}</span></td>
+          <td class="t-num" data-v="{{ w.pathogen_count }}">{{ w.pathogen_count }}</td>
+          <td style="min-width:220px">
+            <span class="stackbar">
+              {% for b in w.breakdown[:6] %}
+              <span style="width: {{ (100 * b.count / (w.isolates or 1)) | round(1) }}%;
+                           background: {{ b.color }}"></span>
+              {% endfor %}
+            </span>
+            <span class="sub">{{ w.top_pathogen }} {{ w.top_share }}%</span>
+          </td>
+          <td class="t-num" data-v="{{ w.mdr_rate }}">{{ w.mdr_rate }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <ul class="stackkey">
+    {% set seen = view.detection_grid | selectattr('detected') | sort(attribute='total', reverse=true) %}
+    {% for g in seen[:6] %}
+    <li><i style="background: {{ g.color }}"></i>{{ g.short_name }}</li>
+    {% endfor %}
+    {% if seen | length > 6 %}<li class="muted">+{{ seen | length - 6 }} more, in the register above</li>{% endif %}
+  </ul>
+  {% else %}
+    {{ empty('No ward has reported a tracked organism', 'Nothing to allocate yet.') }}
+  {% endif %}
+{% endcall %}

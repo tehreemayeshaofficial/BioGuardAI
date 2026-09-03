@@ -1,0 +1,65 @@
+{#
+  The scope bar. A plain GET form so it works with no JavaScript: /filters
+  stores the choice in the session and bounces back to the page you were on,
+  which is why the scope survives navigating between the dashboard, trends
+  and AMR views.
+#}
+<form class="scope" method="get" action="{{ url_for('main.filters_apply') }}" id="scope-form">
+  <input type="hidden" name="next" value="{{ request.path }}">
+
+  <div class="scope-field">
+    <label for="f-from">From</label>
+    <input id="f-from" type="date" name="date_from" value="{{ scope.date_from }}">
+  </div>
+  <div class="scope-field">
+    <label for="f-to">To</label>
+    <input id="f-to" type="date" name="date_to" value="{{ scope.date_to }}">
+  </div>
+
+  <div class="scope-field">
+    <label for="f-ward">Ward</label>
+    <select id="f-ward" name="ward">
+      <option value="">All wards</option>
+      {% for w in options.wards %}
+        <option value="{{ w }}"{% if scope.ward == w %} selected{% endif %}>{{ w }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="scope-field">
+    <label for="f-pathogen">Organism</label>
+    <select id="f-pathogen" name="pathogen">
+      <option value="">All tracked organisms</option>
+      {% for p in options.all_pathogens %}
+        <option value="{{ p.key }}"{% if scope.pathogen == p.key %} selected{% endif %}>{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <label class="scope-check">
+    {# Hidden field first so an unchecked box still clears the stored value. #}
+    <input type="hidden" name="include_nontarget" value="0">
+    <input type="checkbox" name="include_nontarget" value="1"
+           {% if scope.include_nontarget %}checked{% endif %}>
+    <span>show non-target organisms</span>
+  </label>
+
+  <div class="scope-actions">
+    <button type="submit" class="btn btn-sm">Apply</button>
+    {% if scope.is_filtered %}
+      <a class="btn btn-sm btn-ghost" href="{{ url_for('main.filters_clear', next=request.path) }}">Clear</a>
+    {% endif %}
+  </div>
+
+  {% if scope.is_filtered %}
+    <ul class="chips" aria-label="Active filters">
+      {% for chip in scope.chips() %}
+        <li>
+          <a href="{{ url_for('main.filters_apply', next=request.path, **scope.args_without(chip.key)) }}">{{ chip.label }} <span aria-hidden="true">&times;</span></a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <span class="scope-hint">Showing <strong>all data</strong></span>
+  {% endif %}
+</form>

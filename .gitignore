@@ -1,0 +1,42 @@
+# local database & generated/clinical data
+instance/
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
+*.db-journal
+backups/
+uploads/
+
+# secrets / local environment
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+*service-account*.json
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# scratch / QA / temp
+_nowrap_serve.py
+_verify_*.py
+qa_*.png
+bg_audit_*/
+bg_hint_*/
+bg_notif_*/
+
+# editors / OS
+.vscode/
+.qoder/
+.DS_Store
+Thumbs.db

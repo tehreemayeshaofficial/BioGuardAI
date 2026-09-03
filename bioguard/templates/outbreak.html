@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, pill, scorebar, kpi, empty, cluster, chart,
+                                component_table, reasons with context %}
+
+{% block title %}Outbreak risk{% endblock %}
+
+{% block chartdata %}
+<script id="chart-data" type="application/json">{{ chart_payload | jsonenc }}</script>
+{% endblock %}
+
+{% block content %}
+{% set window = kpis.window_days %}
+<div class="pagehead">
+  <div>
+    <h1>Outbreak risk assessment</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('api.outbreak_api', **scope.as_args()) }}">As JSON</a>
+  </div>
+</div>
+
+<div class="status status-{{ status.tone }}">
+  <span class="status-level">{{ 'ALERT' if status.level == 'High'
+    else ('WATCH' if status.level == 'Medium' else ('CLEAR' if status.level == 'Low' else 'IDLE')) }}</span>
+  <span class="status-text">{{ status.text }}</span>
+  <span class="status-side">
+    <span><b>{{ counts.High }}</b> high</span>
+    <span><b>{{ counts.Medium }}</b> medium</span>
+    <span><b>{{ counts.Low }}</b> low</span>
+  </span>
+</div>
+
+{# ------------------------------------------------------------------ kpis #}
+<div class="kpis">
+  {{ kpi('Overall risk', kpis.overall_level,
+         'peak score ' ~ kpis.overall_score ~ '/100',
+         kpis.overall_level | risk_class,
+         'The single highest band reached by any organism once its endemic expectation was applied.') }}
+  {{ kpi('High risk', counts.High,
+         'score &ge; ' ~ thresholds.high, 'high' if counts.High else 'low') }}
+  {{ kpi('Medium risk', counts.Medium,
+         'score &ge; ' ~ thresholds.medium, 'medium' if counts.Medium else 'low') }}
+  {{ kpi('Cases in window', view.outbreak_summary.recent_isolates | num,
+         view.outbreak_summary.recent_patients | num ~ ' patients', 'info',
+         'Episode-deduplicated isolates of tracked organisms inside the ' ~ window ~ '-day window.') }}
+  {{ kpi('Clusters detected', view.outbreak_summary.cluster_count | num,
+         ward_clusters | length ~ ' ward-confined', 'info') }}
+  {{ kpi('Protected cohorts involved',
+         view.outbreak_summary.high_consequence_wards | length,
+         view.outbreak_summary.high_consequence_wards | join(', ') or 'none reporting',
+         'medium' if view.outbreak_summary.high_consequence_wards else '',
+         'ICU, NICU, transplant, oncology and burns units escalate one band, because the same organism has a worse outcome there.') }}
+</div>
+
+{# ------------------------------------------------------------- the scores #}
+<div class="grid2">
+  {% call panel('Weighted risk score by organism') %}
+    {{ chart('risk', 'chart-risk', 300, 'organism', 'hover a bar for the case and patient counts behind it') }}
+  {% endcall %}
+
+  {% call panel('How the score is built') %}
+    <table class="breakdown">
+      <tbody>
+        {% set labels = {
+             'excess_frequency': 'Excess over endemic expectation',
+             'case_volume': 'Absolute recent case volume',
+             'patient_spread': 'Distinct patients involved',
+             'ward_concentration': 'Concentration in one ward',
+             'resistance_burden': 'MDR / XDR / PDR burden',
+             'pathogen_threat': 'Intrinsic severity &times; transmissibility' } %}
+        {% for name, points in weights.items() %}
+        <tr>
+          <th scope="row">{{ labels.get(name, name) }}</th>
+          <td class="t-score"><b>{{ points }}</b><span class="of">/100</span></td>
+          <td class="t-bar"><span class="mini"><span style="width: {{ points }}%"></span></span></td>
+          <td class="t-detail small">{{ name }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------- selected organism detail #}
+{% if selected %}
+{% call panel(selected.pathogen_display ~ ' &mdash; score ' ~ selected.score ~ '/100') %}
+  <div class="split">
+    <div>
+      {{ pill(selected.level, selected.level ~ ' outbreak risk') }}
+      {{ scorebar(selected.score, selected.level) }}
+    </div>
+    <div class="small muted">
+      {{ selected.recent_cases }} case{{ '' if selected.recent_cases == 1 else 's' }} in
+      {{ selected.recent_patients }} patient{{ '' if selected.recent_patients == 1 else 's' }}
+      across {{ selected.recent_wards }} ward{{ '' if selected.recent_wards == 1 else 's' }}
+      &middot; expectation {{ selected.expected_cases }} &middot;
+      {{ selected.excess_ratio }}&times; endemic &middot; z = {{ selected.z_score }}
+    </div>
+  </div>
+
+  {{ component_table(selected.components) }}
+  {{ reasons(selected.escalation_reasons, 'Why this band was reached') }}
+
+  {% if selected.hot_wards %}
+  <h4 style="margin-top:.8rem">Where it sits</h4>
+  <ul class="tag-list">
+    {% for h in selected.hot_wards %}
+    <li class="tag tag-ward">{{ h.ward }} &mdash; {{ h.count }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <h4 style="margin-top:.8rem">Control measures</h4>
+  <ul class="actions">
+    {% for a in selected.actions %}<li>{{ a }}</li>{% endfor %}
+  </ul>
+
+  <p class="link-row">
+    <a href="{{ url_for('main.pathogen_page', key=selected.pathogen, **scope.as_args(pathogen=selected.pathogen)) }}">Full organism report</a>
+    <a href="{{ url_for('main.trends_page', **scope.as_args(pathogen=selected.pathogen)) }}">Trend for this organism</a>
+    <a href="{{ url_for('main.outbreak_page', **scope.args_without('pathogen')) }}">Show every organism again</a>
+  </p>
+{% endcall %}
+{% endif %}
+
+{# --------------------------------------------------------------- register #}
+{% call panel('Risk register') %}
+  {% if ranked %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-risk">
+      <thead>
+        <tr>
+          <th data-sort="level"><button type="button">Band</button></th>
+          <th data-sort="organism"><button type="button">Organism</button></th>
+          <th data-sort="score"><button type="button">Score</button></th>
+          <th class="t-num" data-sort="recent"><button type="button">Cases {{ window }}d</button></th>
+          <th class="t-num" data-sort="expected"><button type="button">Expected</button></th>
+          <th class="t-num" data-sort="excess"><button type="button">&times; endemic</button></th>
+          <th class="t-num" data-sort="patients"><button type="button">Patients</button></th>
+          <th class="t-num" data-sort="wards"><button type="button">Wards</button></th>
+          <th class="t-num" data-sort="mdr"><button type="button">MDR+</button></th>
+          <th data-sort="driver"><button type="button">Main driver</button></th>
+          <th data-sort="action"><button type="button">Recommended action</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in ranked %}
+        <tr class="row-{{ a.level | risk_class }}">
+          <td data-v="{{ 3 if a.level == 'High' else (2 if a.level == 'Medium' else 1) }}">
+            {{ pill(a.level) }}
+            {% if a.de_escalated %}<span class="sub">within endemic range</span>{% endif %}
+          </td>
+          <td>
+            <a class="strong" href="{{ url_for('main.pathogen_page', key=a.pathogen, **scope.as_args(pathogen=a.pathogen)) }}">{{ a.pathogen_display }}</a>
+            <span class="sub">{{ a.full_name }}</span>
+            <span class="sub"><a class="small" href="{{ url_for('main.outbreak_page', **scope.as_args(pathogen=a.pathogen)) }}">show breakdown</a></span>
+          </td>
+          <td data-v="{{ a.score }}">{{ scorebar(a.score, a.level) }}</td>
+          <td class="t-num" data-v="{{ a.recent_cases }}">{{ a.recent_cases }}</td>
+          <td class="t-num muted" data-v="{{ a.expected_cases }}">{{ a.expected_cases }}</td>
+          <td class="t-num {{ 'strong' if a.excess_ratio >= 2 }}" data-v="{{ a.excess_ratio }}">{{ a.excess_ratio }}&times;</td>
+          <td class="t-num" data-v="{{ a.recent_patients }}">{{ a.recent_patients }}</td>
+          <td class="t-num" data-v="{{ a.recent_wards }}">{{ a.recent_wards }}</td>
+          <td class="t-num" data-v="{{ a.mdr_rate }}">{{ a.mdr_rate }}%</td>
+          <td class="small">
+            {% set top = a.components | sort(attribute='points', reverse=true) | first %}
+            {{ top.label }}
+            <span class="sub">{{ top.detail }}</span>
+          </td>
+          <td class="small" style="min-width:200px">{{ a.recommended_action }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('Nothing to assess',
+             'No tracked organism appears in this scope, so no risk score can be computed. Upload a lab report or widen the filter.',
+             'Upload a report', url_for('main.upload_page')) }}
+  {% endif %}
+{% endcall %}
+
+{# ---------------------------------------------------- high + medium cards #}
+{% if counts.High or counts.Medium %}
+<div class="grid2">
+  {% call panel('High risk &mdash; act today') %}
+    {% for a in ranked if a.level == 'High' %}
+    <div class="result-card" style="border-left:3px solid {{ a.color }}">
+      <h4><a href="{{ url_for('main.pathogen_page', key=a.pathogen, **scope.as_args(pathogen=a.pathogen)) }}">{{ a.pathogen_display }}</a>
+        &mdash; {{ a.score }}/100</h4>
+      <p class="small muted">
+        {{ a.recent_cases }} cases in {{ a.recent_patients }} patients across
+        {{ a.recent_wards }} wards over {{ window }} days &middot;
+        {{ a.excess_ratio }}&times; its endemic expectation of {{ a.expected_cases }}.
+      </p>
+      {{ component_table(a.components) }}
+      {{ reasons(a.escalation_reasons, 'Escalation triggers') }}
+      <h4 style="margin-top:.6rem">Actions</h4>
+      <ul class="actions">
+        {% for item in a.actions %}<li>{{ item }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
+  {% endcall %}
+
+  {% call panel('Medium risk &mdash; watch this week') %}
+    {% for a in ranked if a.level == 'Medium' %}
+    <div class="result-card">
+      <h4><a href="{{ url_for('main.pathogen_page', key=a.pathogen, **scope.as_args(pathogen=a.pathogen)) }}">{{ a.pathogen_display }}</a>
+        &mdash; {{ a.score }}/100</h4>
+      <p class="small muted">
+        {{ a.recent_cases }} cases in {{ a.recent_patients }} patients
+        {% if a.hot_wards %}&middot; mostly {{ a.hot_wards[0].ward }} ({{ a.hot_wards[0].count }}){% endif %}
+      </p>
+      <p class="small">
+        {% for c in a.components | sort(attribute='points', reverse=true) %}
+          {{ c.label }} {{ c.points }}/{{ c.max_points }}{{ ' &middot; ' if not loop.last }}
+        {% endfor %}
+      </p>
+      {% if a.escalation_reasons %}
+      <p class="notice notice-warn small">{{ a.escalation_reasons[0] }}</p>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% endcall %}
+</div>
+{% else %}
+  {% call panel('Nothing above the action threshold') %}
+    <p class="notice">No tracked organism is above the action threshold in the last {{ window }} days.</p>
+  {% endcall %}
+{% endif %}
+
+{# ------------------------------------------------------- ward risk units #}
+{% call panel('Ward &times; organism risk units') %}
+  {% if risk_units %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-units">
+      <thead>
+        <tr>
+          <th data-sort="ward"><button type="button">Ward</button></th>
+          <th data-sort="organism"><button type="button">Organism</button></th>
+          <th class="t-num" data-sort="patients"><button type="button">Patients</button></th>
+          <th class="t-num" data-sort="isolates"><button type="button">Recent isolates</button></th>
+          <th class="t-num" data-sort="total"><button type="button">All isolates</button></th>
+          <th class="t-num" data-sort="span"><button type="button">Span (days)</button></th>
+          <th class="t-num" data-sort="mdr"><button type="button">MDR+</button></th>
+          <th data-sort="score"><button type="button">Local score</button></th>
+          <th data-sort="level"><button type="button">Band</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in risk_units %}
+        <tr class="row-{{ u.level | risk_class }}">
+          <td>
+            <b>{{ u.ward or 'Unallocated' }}</b>
+            {% if u.high_consequence %}<span class="tag tag-protected">protected cohort</span>{% endif %}
+          </td>
+          <td><a href="{{ url_for('main.pathogen_page', key=u.pathogen, **scope.as_args(pathogen=u.pathogen)) }}">{{ u.pathogen_display }}</a></td>
+          <td class="t-num" data-v="{{ u.n_patients }}"><b>{{ u.n_patients }}</b></td>
+          <td class="t-num" data-v="{{ u.isolates }}">{{ u.isolates }}</td>
+          <td class="t-num muted" data-v="{{ u.total_isolates }}">{{ u.total_isolates }}</td>
+          <td class="t-num" data-v="{{ u.span_days }}">{{ u.span_days }}</td>
+          <td class="t-num" data-v="{{ u.mdr }}">{{ u.mdr }}</td>
+          <td data-v="{{ u.score }}">{{ scorebar(u.score, u.level) }}</td>
+          <td>{{ pill(u.level) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <details style="margin-top:.6rem">
+    <summary class="small">Patient IDs behind each unit</summary>
+    <ul class="clusters" style="margin-top:.5rem">
+      {% for u in risk_units %}
+      <li class="cluster">
+        <div class="cluster-head">
+          <span class="cluster-organism">{{ u.ward or 'Unallocated' }} &middot; {{ u.pathogen_display }}</span>
+          <span class="cluster-count">{{ u.n_patients }} patient{{ '' if u.n_patients == 1 else 's' }}</span>
+        </div>
+        <p class="mono" style="margin:.25rem 0 0; font-size:11px">{{ u.patients | join(', ') }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% else %}
+    {{ empty('No ward holds a recent case of a tracked organism',
+             'Nothing to allocate an intervention to inside the last ' ~ window ~ ' days.') }}
+  {% endif %}
+{% endcall %}
+
+{# ------------------------------------------------------------ cluster lists #}
+<div class="grid2">
+  {% call panel('Clusters feeding the score') %}
+    {% if clusters %}
+    <ul class="clusters">
+      {% for c in clusters %}{{ cluster(c, true) }}{% endfor %}
+    </ul>
+    {% else %}
+      {{ empty('No cluster exceeds expectation',
+               'The rolling scan found no linked group large enough to be unusual for the organism concerned.') }}
+    {% endif %}
+  {% endcall %}
+
+  {% call panel('Ward-confined clusters') %}
+    {% if ward_clusters %}
+    <ul class="clusters">
+      {% for c in ward_clusters %}{{ cluster(c, true) }}{% endfor %}
+    </ul>
+    {% else %}
+      {{ empty('No ward holds three patients with one organism',
+               'Sporadic cases are still counted in the score above; they simply do not point at transmission on a single unit.') }}
+    {% endif %}
+  {% endcall %}
+</div>
+{% endblock %}

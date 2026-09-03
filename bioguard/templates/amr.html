@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, pill, kpi, delta, meter, empty, chart,
+                                sorttable with context %}
+{# Bar widths interpolate Jinja ({{ ... }}) into style attributes; the editor's
+   static CSS parser reads the brace as a block start and misreports it. Renders
+   to valid CSS - suppressed project-wide in .vscode/settings.json. #}
+
+{% block title %}Antimicrobial resistance{% endblock %}
+
+{% block chartdata %}
+<script id="chart-data" type="application/json">{{ chart_payload | jsonenc }}</script>
+{% endblock %}
+
+{% block content %}
+{% set alert_rate = amr_alert_rate %}
+{% set window = kpis.window_days %}
+<div class="pagehead">
+  <div>
+    <h1>Antimicrobial resistance</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('api.amr_api', **scope.as_args()) }}">As JSON</a>
+    <a class="btn btn-ghost" href="{{ url_for('api.export_isolates', **scope.as_args()) }}">Export CSV</a>
+  </div>
+</div>
+
+{# ------------------------------------------------------------------ kpis #}
+{% set n_alerts = amr.alerts | length %}
+{% set tested = amr.per_pathogen.values() | sum(attribute='isolates_with_panel') %}
+<div class="kpis">
+  {{ kpi('MDR or worse', amr.overall_mdr_rate | pct,
+         'of episode-deduplicated cases', 'high' if amr.overall_mdr_rate >= 20 else 'low',
+         'Non-susceptible to at least one agent in three or more antimicrobial categories.') }}
+  {{ kpi('XDR / PDR isolates',
+         amr.gram_negative.xdr + amr.gram_negative.pdr + amr.gram_positive.xdr + amr.gram_positive.pdr,
+         'resistance is not the same as severity', 'high',
+         'Extensively or pan-drug resistant isolates: susceptible to almost nothing, or nothing at all.') }}
+  {{ kpi('AMR alerts', n_alerts,
+         (amr.alerts | selectattr('severity', 'equalto', 'Critical') | list | length) ~ ' critical',
+         'high' if n_alerts else 'low',
+         'Any organism &times; agent pair at or above the ' ~ alert_rate ~ '% resistance alert rate.') }}
+  {{ kpi('Last-line exhausted', amr.last_line_exhausted | length,
+         'no tested reserve agent left the isolate susceptible',
+         'high' if amr.last_line_exhausted else 'low',
+         'The most actionable finding on this page: two or more reserve agents tested, none susceptible.') }}
+  {{ kpi('Gram-negative MDR', amr.gram_negative.mdr_rate | pct,
+         amr.gram_negative.episodes ~ ' episodes, ' ~ amr.gram_negative.isolates | num ~ ' isolates',
+         'high' if amr.gram_negative.mdr_rate >= 20 else '') }}
+  {{ kpi('Gram-positive MDR', amr.gram_positive.mdr_rate | pct,
+         amr.gram_positive.episodes ~ ' episodes, ' ~ amr.gram_positive.isolates | num ~ ' isolates',
+         'high' if amr.gram_positive.mdr_rate >= 20 else '') }}
+  {{ kpi('Susceptibility coverage', ((100 * tested / (kpis.isolates or 1)) | round(0) | int) ~ '%',
+         tested | num ~ ' of ' ~ kpis.isolates | num ~ ' isolates carry a panel',
+         'low' if tested >= kpis.isolates * 0.6 else 'medium',
+         'Isolates without a panel cannot contribute to any rate here; they are counted as susceptible-by-absence nowhere in this app.') }}
+</div>
+
+{# ------------------------------------------------- the cannot-treat signal #}
+{% if amr.last_line_exhausted %}
+<div class="status status-high">
+  <span class="status-level">ACTION</span>
+  <span class="status-text">
+    {{ amr.last_line_exhausted | length }} isolate{{ '' if amr.last_line_exhausted | length == 1 else 's' }}
+    non-susceptible to every last-line agent tested.
+    Most recent: {{ amr.last_line_exhausted[0].pathogen_display }} in patient
+    {{ amr.last_line_exhausted[0].patient_id }}
+    ({{ amr.last_line_exhausted[0].ward or 'ward not recorded' }}) on
+    {{ amr.last_line_exhausted[0].date | iso_date }}.
+  </span>
+  <span class="status-side">
+    <a href="{{ url_for('main.patients_page', **scope.as_args()) }}">Patient view</a>
+  </span>
+</div>
+{% endif %}
+
+{# ----------------------------------------------------------- the charts #}
+<div class="grid2">
+  {% call panel('Resistance rate by month') %}
+    {{ chart('amr', 'chart-amr', 280, 'month',
+             'dashed line is the ' ~ alert_rate ~ '% alert rate; missing months mean nothing was tested, not 0%') }}
+  {% endcall %}
+
+  {% call panel('MDR burden by organism') %}
+    {{ chart('mdr', 'chart-mdr', 280, 'organism', 'worst first') }}
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------------------ alert queue #}
+{% call panel('AMR alert queue') %}
+  {% if amr.alerts %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-alerts">
+      <thead>
+        <tr>
+          <th data-sort="severity"><button type="button">Severity</button></th>
+          <th data-sort="organism"><button type="button">Organism</button></th>
+          <th data-sort="agent"><button type="button">Agent</button></th>
+          <th data-sort="category"><button type="button">Category</button></th>
+          <th data-sort="rate"><button type="button">Resistance</button></th>
+          <th class="t-num" data-sort="tested"><button type="button">Tested</button></th>
+          <th class="t-num" data-sort="ns"><button type="button">Non-susceptible</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in amr.alerts %}
+        <tr class="row-{{ 'high' if a.severity in ('Critical', 'High') else 'medium' }}">
+          <td data-v="{{ 4 if a.severity == 'Critical' else (3 if a.severity == 'High' else 2) }}">
+            {{ pill('High' if a.severity == 'Critical' else ('Medium' if a.severity == 'High' else 'Low'), a.severity) }}
+          </td>
+          <td><a href="{{ url_for('main.pathogen_page', key=a.pathogen, **scope.as_args()) }}">{{ a.pathogen_display }}</a></td>
+          <td>
+            <b>{{ a.antibiotic_display }}</b>
+            {% if a.is_critical %}<span class="tag tag-mdr">last-line</span>{% endif %}
+          </td>
+          <td class="small">{{ a.category }}</td>
+          <td data-v="{{ a.rate }}">{{ meter(a.rate, a.tested, a.is_critical, a.pathogen_display ~ ' - ' ~ a.antibiotic_display) }}</td>
+          <td class="t-num" data-v="{{ a.tested }}">{{ a.tested }}</td>
+          <td class="t-num" data-v="{{ a.non_susceptible }}">{{ a.non_susceptible }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('No agent has crossed the alert rate',
+             'Nothing in this scope reaches ' ~ alert_rate ~ '% resistance for any organism &times; agent pair with enough tests behind it.') }}
+  {% endif %}
+{% endcall %}
+
+{# ------------------------------------------------------ movements #}
+<div class="grid2">
+  {% call panel('Resistance rising') %}
+    {% if rising %}
+    <ul class="findings">
+      {% for m in rising[:10] %}
+      <li class="finding finding-{{ 'high' if m.delta_pp >= 25 else 'medium' }}">
+        <div class="finding-head">
+          <h3>{{ m.pathogen_display }} &rarr; {{ m.antibiotic_display }}</h3>
+          <span class="finding-badge">+{{ m.delta_pp }} pp</span>
+        </div>
+        <p class="finding-detail">
+          {{ m.from_rate }}% &rarr; {{ m.to_rate }}% resistant
+          <span class="muted">({{ m.tests_early }} early tests, {{ m.tests_recent }} recent)</span>
+        </p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      {{ empty('No agent is measurably rising',
+               'Every organism &times; agent pair with enough tests on both halves of the period is flat or falling.') }}
+    {% endif %}
+  {% endcall %}
+
+  {% call panel('Resistance falling') %}
+    {% if falling %}
+    <ul class="findings">
+      {% for m in falling[:10] %}
+      <li class="finding finding-low">
+        <div class="finding-head">
+          <h3>{{ m.pathogen_display }} &rarr; {{ m.antibiotic_display }}</h3>
+          <span class="finding-badge">{{ m.delta_pp }} pp</span>
+        </div>
+        <p class="finding-detail">
+          {{ m.from_rate }}% &rarr; {{ m.to_rate }}% resistant
+          <span class="muted">({{ m.tests_early }} early tests, {{ m.tests_recent }} recent)</span>
+        </p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      {{ empty('No agent is measurably falling', 'Resistance holds where it is.') }}
+    {% endif %}
+  {% endcall %}
+</div>
+
+{# ------------------------------------------------ highest resistance table #}
+{% call panel('Highest resistance rates') %}
+  {% if agents %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-agents">
+      <thead>
+        <tr>
+          <th data-sort="organism"><button type="button">Organism</button></th>
+          <th data-sort="agent"><button type="button">Agent</button></th>
+          <th data-sort="category"><button type="button">Category</button></th>
+          <th data-sort="rate"><button type="button">Resistance rate</button></th>
+          <th class="t-num" data-sort="r"><button type="button">R</button></th>
+          <th class="t-num" data-sort="i"><button type="button">I</button></th>
+          <th class="t-num" data-sort="s"><button type="button">S</button></th>
+          <th class="t-num" data-sort="tested"><button type="button">Tested</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in agents %}
+        <tr>
+          <td><a href="{{ url_for('main.pathogen_page', key=r.pathogen, **scope.as_args()) }}">{{ r.pathogen_display }}</a></td>
+          <td>{% if r.is_critical %}<b>{{ r.antibiotic_display }}</b>{% else %}{{ r.antibiotic_display }}{% endif %}
+            {% if r.is_critical %}<span class="tag tag-mdr">last-line</span>{% endif %}</td>
+          <td class="small">{{ r.category }}</td>
+          <td data-v="{{ r.rate }}">{{ meter(r.rate, r.tested, r.is_critical, r.pathogen_display ~ ' - ' ~ r.antibiotic_display) }}</td>
+          <td class="t-num" data-v="{{ r.resistant }}">{{ r.resistant }}</td>
+          <td class="t-num" data-v="{{ r.intermediate }}">{{ r.intermediate }}</td>
+          <td class="t-num" data-v="{{ r.susceptible }}">{{ r.susceptible }}</td>
+          <td class="t-num muted" data-v="{{ r.tested }}">{{ r.tested }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('No susceptibility panels in this scope',
+             'Every isolate was imported without antibiotic results, so no rate can be calculated. Upload a report carrying an antibiogram column.') }}
+  {% endif %}
+{% endcall %}
+
+{# ---------------------------------------------- per-organism resistance #}
+{% call panel('Resistance profile by organism') %}
+  {% if amr.ranked %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-profile">
+      <thead>
+        <tr>
+          <th data-sort="organism"><button type="button">Organism</button></th>
+          <th class="t-num" data-sort="isolates"><button type="button">Isolates</button></th>
+          <th class="t-num" data-sort="panel"><button type="button">With panel</button></th>
+          <th class="t-num" data-sort="episodes"><button type="button">Episodes</button></th>
+          <th class="t-num" data-sort="mdr"><button type="button">MDR</button></th>
+          <th class="t-num" data-sort="xdr"><button type="button">XDR</button></th>
+          <th class="t-num" data-sort="pdr"><button type="button">PDR</button></th>
+          <th data-sort="mdrrate"><button type="button">MDR rate</button></th>
+          <th data-sort="worst"><button type="button">Worst agent</button></th>
+          <th data-sort="critical"><button type="button">Last-line hits</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in amr.ranked %}
+        <tr>
+          <td>
+            <a href="{{ url_for('main.pathogen_page', key=v.pathogen, **scope.as_args()) }}">{{ v.pathogen_display }}</a>
+            <span class="sub">{{ v.isolates }} isolates &middot; {{ v.resistance_share }}% of isolates MDR+</span>
+          </td>
+          <td class="t-num" data-v="{{ v.isolates }}">{{ v.isolates }}</td>
+          <td class="t-num" data-v="{{ v.isolates_with_panel }}">{{ v.isolates_with_panel }}</td>
+          <td class="t-num" data-v="{{ v.episodes }}">{{ v.episodes }}</td>
+          <td class="t-num" data-v="{{ v.mdr }}">{{ v.mdr }}</td>
+          <td class="t-num" data-v="{{ v.xdr }}">{{ v.xdr }}</td>
+          <td class="t-num" data-v="{{ v.pdr }}">{{ v.pdr }}</td>
+          <td data-v="{{ v.mdr_rate }}">{{ meter(v.mdr_rate, v.episodes, false, v.pathogen_display ~ ' MDR or worse') }}</td>
+          <td>
+            {% if v.top_agent %}
+              <b>{{ v.top_agent }}</b> {{ v.top_rate }}%
+              {% if v.worst_agents | length > 1 %}
+              <details>
+                <summary class="small">next {{ v.worst_agents | length - 1 }}</summary>
+                <ul class="tag-list" style="margin-top:.25rem">
+                  {% for a in v.worst_agents[1:] %}
+                  <li class="tag">{{ a.antibiotic_display }} {{ a.rate }}% ({{ a.tested }})</li>
+                  {% endfor %}
+                </ul>
+              </details>
+              {% endif %}
+            {% else %}<span class="muted small">no panel reported</span>{% endif %}
+          </td>
+          <td>
+            {% if v.critical_hits %}
+            <ul class="tag-list">
+              {% for agent, n in v.critical_hits %}<li class="tag tag-mdr">{{ agent }} &times;{{ n }}</li>{% endfor %}
+            </ul>
+            {% else %}<span class="muted small">none</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('No organisms with susceptibility data', 'Nothing to profile in this scope.') }}
+  {% endif %}
+{% endcall %}
+
+{# ----------------------------------------------------- gram split + notes #}
+<div class="grid2">
+  {% call panel('Gram-negative versus Gram-positive') %}
+  <table class="breakdown">
+    <tbody>
+      {% for label, b in (('Gram-negative', amr.gram_negative), ('Gram-positive', amr.gram_positive)) %}
+      <tr>
+        <th scope="row">{{ label }}</th>
+        <td class="t-score"><b>{{ b.mdr_rate }}</b><span class="of">% MDR+</span></td>
+        <td class="t-bar"><span class="mini"><span style="width: {{ [b.mdr_rate, 100] | min }}%"></span></span></td>
+        <td class="t-detail">
+          {{ b.episodes }} episode{{ '' if b.episodes == 1 else 's' }} &middot;
+          {{ b.mdr }} MDR &middot; {{ b.xdr }} XDR &middot; {{ b.pdr }} PDR
+          {% if b.isolates_with_panel %}&middot; {{ b.isolates_with_panel }} tested{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endcall %}
+</div>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% from "_macros.html" import panel, pill, kpi, empty, sorttable with context %}
+
+{% block title %}Patients{% endblock %}
+
+{% block content %}
+{% set window = kpis.window_days %}
+{% set rows = patients.top %}
+{% set multi = patients.polymicrobial %}
+<div class="pagehead">
+  <div>
+    <h1>Patients</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost" href="{{ url_for('api.patients_api', **scope.as_args()) }}">As JSON</a>
+    <a class="btn btn-ghost" href="{{ url_for('api.export_isolates', **scope.as_args()) }}">Export CSV</a>
+  </div>
+</div>
+
+<div class="kpis">
+  {{ kpi('Patients with a target organism', patients.total_patients | num,
+         kpis.isolates | num ~ ' isolates in scope', 'info') }}
+  {{ kpi('Polymicrobial', patients.polymicrobial_patients | num,
+         'two or more tracked species', 'medium' if patients.polymicrobial_patients else 'low',
+         'A second species in the same patient is either a contamination story or a heavily instrumented case; both deserve a look.') }}
+  {{ kpi('Repeat isolates', patients.repeat_isolate_patients | num,
+         'more than one culture positive', '',
+         'Persistent bacteraemia and relapse both surface here; so does routine follow-up sampling.') }}
+  {{ kpi('Recently affected', kpis.recent_patients | num,
+         kpis.recent_wards ~ ' wards in the last ' ~ window ~ 'd', 'info') }}
+  {{ kpi('Protected cohorts', (rows | selectattr('high_consequence_ward') | list | length),
+         'of the ' ~ rows | length ~ ' listed', 'medium',
+         'ICU, NICU, transplant, oncology and burns patients escalate one band because the same organism has a worse outcome there.') }}
+</div>
+
+{# ------------------------------------------------------ polymicrobial first #}
+{% call panel('More than one organism in the same patient') %}
+  {% if multi %}
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-multi">
+      <thead>
+        <tr>
+          <th data-sort="patient"><button type="button">Patient</button></th>
+          <th class="t-num" data-sort="species"><button type="button">Species</button></th>
+          <th data-sort="organisms"><button type="button">Organisms</button></th>
+          <th data-sort="ward"><button type="button">Ward(s)</button></th>
+          <th class="t-num" data-sort="isolates"><button type="button">Isolates</button></th>
+          <th class="t-num" data-sort="mdr"><button type="button">MDR+</button></th>
+          <th data-sort="first"><button type="button">First</button></th>
+          <th data-sort="last"><button type="button">Latest</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in multi %}
+        <tr class="{{ 'row-medium' if p.mdr }}">
+          <td class="mono">{{ p.patient_id }}</td>
+          <td class="t-num" data-v="{{ p.distinct_pathogens }}"><b>{{ p.distinct_pathogens }}</b></td>
+          <td>
+            <ul class="tag-list">
+              {% for k in p.pathogen_keys %}
+              <li><a class="tag" href="{{ url_for('main.pathogen_page', key=k, **scope.as_args()) }}">{{ p.pathogens[loop.index0] }}</a></li>
+              {% endfor %}
+            </ul>
+          </td>
+          <td>
+            {{ p.wards | join(', ') or 'Unallocated' }}
+            {% if p.high_consequence_ward %}<span class="tag tag-protected">protected</span>{% endif %}
+          </td>
+          <td class="t-num" data-v="{{ p.isolates }}">{{ p.isolates }}</td>
+          <td class="t-num" data-v="{{ p.mdr }}">{% if p.mdr %}<b>{{ p.mdr }}</b>{% else %}0{% endif %}</td>
+          <td class="nowrap small" data-v="{{ p.first }}">{{ p.first | iso_date }}</td>
+          <td class="nowrap small" data-v="{{ p.last }}">{{ p.last | iso_date }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('No patient carries two tracked organisms',
+             'Every patient in this scope has at most one of the twelve target species.') }}
+  {% endif %}
+{% endcall %}
+
+{# -------------------------------------------------------------- all patients #}
+{% call panel('Every patient in scope') %}
+  {% if rows %}
+  <div class="search">
+    <input type="search" id="q-patients" data-filter="tbl-patients"
+           placeholder="Filter these rows by patient, ward or organism"
+           aria-label="Filter the patients table">
+  </div>
+  <span class="small muted" data-filter-count="q-patients" style="display:block;margin:.3rem 0 .5rem">{{ rows | length }} rows on this page</span>
+  <div class="tablewrap">
+    <table class="grid" data-sortable id="tbl-patients">
+      <thead>
+        <tr>
+          <th data-sort="patient"><button type="button">Patient</button></th>
+          <th data-sort="ward"><button type="button">Ward(s)</button></th>
+          <th class="t-num" data-sort="isolates"><button type="button">Isolates</button></th>
+          <th class="t-num" data-sort="species"><button type="button">Species</button></th>
+          <th data-sort="organisms"><button type="button">Organisms</button></th>
+          <th class="t-num" data-sort="mdr"><button type="button">MDR+</button></th>
+          <th data-sort="span"><button type="button">Under surveillance</button></th>
+          <th><button type="button">Isolates</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in rows %}
+        <tr class="{{ 'row-high' if p.mdr >= 2 else ('row-medium' if p.distinct_pathogens > 1) }}">
+          <td class="mono strong">{{ p.patient_id }}</td>
+          <td>
+            {{ p.wards | join(', ') or 'Unallocated' }}
+            {% if p.high_consequence_ward %}<span class="tag tag-protected">protected</span>{% endif %}
+          </td>
+          <td class="t-num" data-v="{{ p.isolates }}">{{ p.isolates }}</td>
+          <td class="t-num" data-v="{{ p.distinct_pathogens }}">{{ p.distinct_pathogens }}</td>
+          <td>
+            {% for k in p.pathogen_keys %}
+              <a href="{{ url_for('main.pathogen_page', key=k, **scope.as_args()) }}">{{ p.pathogens[loop.index0] }}</a>{{ '' if loop.last else ' ' }}
+            {% endfor %}
+          </td>
+          <td class="t-num" data-v="{{ p.mdr }}">
+            {% if p.mdr %}<span class="tag tag-mdr">{{ p.mdr }}</span>{% else %}<span class="muted">0</span>{% endif %}
+          </td>
+          <td class="small nowrap">
+            {{ p.first | iso_date }} &rarr; {{ p.last | iso_date }}
+          </td>
+          <td><a class="btn btn-sm btn-ghost" href="{{ url_for('main.isolates_page', q=p.patient_id, **scope.as_args()) }}">view</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty('No patient data in this scope',
+             'Nothing to list. Upload a lab report or clear the filters.',
+             'Upload a report', url_for('main.upload_page')) }}
+  {% endif %}
+{% endcall %}
+{% endblock %}

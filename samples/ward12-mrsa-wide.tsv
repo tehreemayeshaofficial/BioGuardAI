@@ -1,0 +1,9 @@
+Patient ID	Patient Name	Ward	Room	Sample Date	Specimen Type	Organism Identified	Penicillin	Cefoxitin	Clindamycin	Erythromycin	Gentamicin	Rifampicin	Vancomycin	Linezolid	Cotrimoxazole
+S-4001	Halloran, P	Ward 12	12	28 Aug 2026	Wound swab	Staphylococcus aureus	R	R	S	R	S	S	S	S	S
+S-4001		Ward 12		28 Aug 2026		Staphylococcus aureus	R	R	R	R	S	S	S	S	
+S-4007	Okafor, R			26 Aug 2026	Blood culture	Staphylococcus aureus	R	R	S	S	S	R	S	S	S
+S-4012	Berg, U		09	24 Aug 2026	Sputum	Staphylococcus aureus	S	S	S	S	S	S	S		S
+S-4019	Nasser, F			22 Aug 2026	Urine	Staphylococcus aureus	R	R	S	R	R	S	S	S	S
+S-4024	Doyle, M		21	19 Aug 2026	Wound swab	Staphylococcus aureus	S	S	S	S	S	S	S		S
+S-4030	Kovač, A			16 Aug 2026	Blood culture	Coagulase-negative Staphylococcus	R	R	R	S	S	R	S	S	
+
